@@ -1,0 +1,191 @@
+{
+  "entities": {
+    "StaffMember": {
+      "title": "StaffMember",
+      "description": "Thành viên ban giám hiệu, giáo viên hoặc nhân viên trường THPT Phương Xá",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["bgh", "giaovien", "nhanvien"] },
+        "department": { "type": "string" },
+        "position": { "type": "string" },
+        "subject": { "type": "string" },
+        "classAssigned": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "status": { "type": "string" },
+        "baseScore": { "type": "number" },
+        "avatar": { "type": "string" },
+        "academicDegree": { "type": "string" }
+      },
+      "required": ["id", "code", "name", "type", "department", "position", "baseScore"]
+    },
+    "KpiCriterion": {
+      "title": "KpiCriterion",
+      "description": "Tiêu chí chấm điểm thi đua KPI",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "group": { "type": "string" },
+        "targetRole": { "type": "string", "enum": ["all", "bgh", "giaovien", "nhanvien"] },
+        "type": { "type": "string", "enum": ["plus", "minus"] },
+        "points": { "type": "number" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] }
+      },
+      "required": ["id", "code", "name", "group", "type", "points", "status"]
+    },
+    "KpiIncident": {
+      "title": "KpiIncident",
+      "description": "Sự vụ phát sinh điểm cộng hoặc điểm trừ thi đua",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "personId": { "type": "string" },
+        "personName": { "type": "string" },
+        "department": { "type": "string" },
+        "criterionId": { "type": "string" },
+        "criterionName": { "type": "string" },
+        "type": { "type": "string", "enum": ["plus", "minus"] },
+        "points": { "type": "number" },
+        "quantity": { "type": "number" },
+        "totalPoints": { "type": "number" },
+        "date": { "type": "string" },
+        "month": { "type": "number" },
+        "semester": { "type": "number" },
+        "schoolYear": { "type": "string" },
+        "evidence": { "type": "string" },
+        "notes": { "type": "string" },
+        "recordedBy": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "personId", "personName", "criterionId", "type", "totalPoints", "date", "month", "schoolYear"]
+    },
+    "TeacherKpiEvaluation": {
+      "title": "TeacherKpiEvaluation",
+      "description": "Phiếu đánh giá chấm điểm KPI chuẩn 100 điểm của giáo viên/nhân viên",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "staffId": { "type": "string" },
+        "staffCode": { "type": "string" },
+        "staffName": { "type": "string" },
+        "department": { "type": "string" },
+        "position": { "type": "string" },
+        "subject": { "type": "string" },
+        "targetType": { "type": "string", "enum": ["giaovien", "nhanvien"] },
+        "schoolYear": { "type": "string" },
+        "selfTotalScore": { "type": "number" },
+        "deptTotalScore": { "type": "number" },
+        "bghTotalScore": { "type": "number" },
+        "selfRank": { "type": "string" },
+        "deptRank": { "type": "string" },
+        "bghRank": { "type": "string" },
+        "status": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "staffId", "staffCode", "staffName", "targetType", "schoolYear", "selfTotalScore", "status"]
+    },
+    "SystemSetting": {
+      "title": "SystemSetting",
+      "description": "Cấu hình chung của hệ thống trường",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "schoolConfig": { "type": "object" },
+        "currentSchoolYear": { "type": "string" },
+        "currentSemester": { "type": "number" },
+        "currentMonth": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id"]
+    },
+    "HomepageBackground": {
+      "title": "HomepageBackground",
+      "description": "Cấu hình và lưu trữ ảnh nền cho module Trang chủ của trường THPT Phương Xá",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "file_name": { "type": "string" },
+        "file_path": { "type": "string" },
+        "image_url": { "type": "string" },
+        "position": { "type": "string", "enum": ["center center", "center top", "center bottom", "left center", "right center"] },
+        "overlay_opacity": { "type": "number" },
+        "is_active": { "type": "boolean" },
+        "uploaded_by": { "type": "string" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" }
+      },
+      "required": ["id", "file_name", "image_url", "position", "overlay_opacity", "is_active", "uploaded_by", "created_at"]
+    },
+    "SchoolUiSettings": {
+      "title": "SchoolUiSettings",
+      "description": "Cấu hình tùy biến giao diện trang chủ, header, logo, màu sắc trường THPT Phương Xá",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "school_name": { "type": "string" },
+        "department_name": { "type": "string" },
+        "system_name": { "type": "string" },
+        "slogan": { "type": "string" },
+        "logo_url": { "type": "string" },
+        "school_image_url": { "type": "string" },
+        "header_background_url": { "type": "string" },
+        "primary_color": { "type": "string" },
+        "secondary_color": { "type": "string" },
+        "text_color": { "type": "string" },
+        "background_color": { "type": "string" },
+        "sidebar_color": { "type": "string" },
+        "button_color": { "type": "string" },
+        "header_height": { "type": "number" },
+        "logo_size": { "type": "number" },
+        "school_image_size": { "type": "number" },
+        "show_logo": { "type": "boolean" },
+        "show_department_name": { "type": "boolean" },
+        "show_school_name": { "type": "boolean" },
+        "show_system_name": { "type": "boolean" },
+        "show_slogan": { "type": "boolean" },
+        "show_school_image": { "type": "boolean" },
+        "show_header_background": { "type": "boolean" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" },
+        "updated_by": { "type": "string" }
+      },
+      "required": ["id", "school_name", "department_name", "system_name", "slogan"]
+    }
+  },
+  "firestore": {
+    "/staff/{staffId}": {
+      "schema": "StaffMember",
+      "description": "Hồ sơ cán bộ giáo viên và nhân viên"
+    },
+    "/criteria/{criterionId}": {
+      "schema": "KpiCriterion",
+      "description": "Danh mục tiêu chí thi đua KPI"
+    },
+    "/incidents/{incidentId}": {
+      "schema": "KpiIncident",
+      "description": "Nhật ký phát sinh điểm KPI"
+    },
+    "/evaluations/{evaluationId}": {
+      "schema": "TeacherKpiEvaluation",
+      "description": "Phiếu chấm điểm KPI chuẩn 100 điểm"
+    },
+    "/settings/{settingId}": {
+      "schema": "SystemSetting",
+      "description": "Cấu hình trường và năm học"
+    },
+    "/homepage_backgrounds/{backgroundId}": {
+      "schema": "HomepageBackground",
+      "description": "Danh sách các ảnh nền trang chủ đã tải lên và trạng thái kích hoạt"
+    },
+    "/school_ui_settings/{settingId}": {
+      "schema": "SchoolUiSettings",
+      "description": "Cấu hình giao diện trang chủ hoạt động của trường"
+    }
+  }
+}

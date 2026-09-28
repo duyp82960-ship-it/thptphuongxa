@@ -1,0 +1,6 @@
+{
+  "name": "Quản lý THPT Phương Xá",
+  "description": "Hệ thống quản lý trường học và KPI chuyên nghiệp dành cho Ban Giám hiệu, Giáo viên và Nhân viên Trường THPT Phương Xá.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
