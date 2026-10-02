@@ -275,7 +275,7 @@ export const TEACHER_KPI_CRITERIA: KpiCriterionItem[] = [
     order: 4,
     content:
       'Đổi mới phương pháp, ứng dụng CNTT/AI và học liệu số phù hợp, có kiểm soát; không lạm dụng công nghệ; có sản phẩm hoặc minh chứng sử dụng.',
-    maxPoints: 5,
+    maxPoints: 6,
   },
   {
     id: 'III.2.5',
@@ -302,7 +302,7 @@ export const TEACHER_KPI_CRITERIA: KpiCriterionItem[] = [
     order: 7,
     content:
       'Chấm, chữa, nhận xét; trả bài; cập nhật điểm và hồ sơ điện tử đúng thời hạn; sửa điểm/thông tin học sinh đúng quy trình.',
-    maxPoints: 5,
+    maxPoints: 6,
   },
   {
     id: 'III.2.8',
@@ -311,7 +311,7 @@ export const TEACHER_KPI_CRITERIA: KpiCriterionItem[] = [
     order: 8,
     content:
       'Tham gia dự giờ, thao giảng, nghiên cứu bài học; tiếp thu và thực hiện điều chỉnh sau góp ý chuyên môn.',
-    maxPoints: 4,
+    maxPoints: 5,
   },
   {
     id: 'III.2.9',
@@ -320,7 +320,7 @@ export const TEACHER_KPI_CRITERIA: KpiCriterionItem[] = [
     order: 9,
     content:
       'Tham gia sinh hoạt chuyên môn, tập huấn, bồi dưỡng; có sản phẩm chia sẻ chuyên môn, học liệu, chuyên đề, sáng kiến hoặc giải pháp cải tiến.',
-    maxPoints: 4,
+    maxPoints: 5,
   },
   {
     id: 'III.2.10',
@@ -1402,9 +1402,12 @@ export function validateKpiCriteriaStructure(criteriaList: KpiCriterionItem[]): 
   let sectionIII2MaxScore = 0;
 
   criteriaList.forEach((crit) => {
-    totalMaxScore += crit.maxPoints;
-    if (crit.section === 'III.2') {
-      sectionIII2MaxScore += crit.maxPoints;
+    if (crit.status !== 'inactive') {
+      const pts = Number(crit.maxPoints || 0);
+      totalMaxScore += pts;
+      if (crit.section === 'III.2') {
+        sectionIII2MaxScore += pts;
+      }
     }
   });
 
@@ -1419,7 +1422,7 @@ export function validateKpiCriteriaStructure(criteriaList: KpiCriterionItem[]): 
         isValid: false,
         totalMaxScore,
         sectionIII2MaxScore,
-        errorMessage: `Cấu hình KPI chưa hợp lệ. Tổng điểm tối đa mục III.2 phải bằng đúng 60 điểm (Hiện tại: ${sectionIII2MaxScore} điểm).`,
+        errorMessage: `Tổng điểm cấu hình của III.2 hiện là ${sectionIII2MaxScore}, chưa đủ 60; cần bổ sung ${60 - sectionIII2MaxScore} điểm theo cấu trúc phiếu.`,
       };
     }
     if (totalMaxScore !== 100) {

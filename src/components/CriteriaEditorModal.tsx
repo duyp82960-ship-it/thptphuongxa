@@ -169,19 +169,20 @@ export const CriteriaEditorModal: React.FC<CriteriaEditorModalProps> = ({
     const isIValid = sectionTotals['I'] === 15;
     const isIIValid = sectionTotals['II'] === 15;
     const isIII1Valid = sectionTotals['III.1'] === 10;
-    const isIII2Valid = sectionTotals['III.2'] === 60;
+    const sIII2 = sectionTotals['III.2'] || 0;
+    const isIII2Valid = sIII2 === 60;
     const isGrandValid = grandTotal === 100;
 
     let message = '';
     if (!isIII2Valid) {
-      message = `CẢNH BÁO: Nhóm III.2 hiện có ${sectionTotals['III.2'] || 0}/60 điểm (Yêu cầu bắt buộc bằng đúng 60 điểm).`;
+      message = `Tổng điểm cấu hình của III.2 hiện là ${sIII2}, chưa đủ 60; cần bổ sung ${60 - sIII2} điểm theo cấu trúc phiếu.`;
     } else if (!isGrandValid) {
-      message = `CẢNH BÁO: Tổng điểm KPI hiện tại = ${grandTotal}/100 điểm (I=${sectionTotals['I'] || 0}, II=${sectionTotals['II'] || 0}, III.1=${sectionTotals['III.1'] || 0}, III.2=${sectionTotals['III.2'] || 0}).`;
+      message = `CẢNH BÁO: Tổng điểm KPI hiện tại = ${grandTotal}/100 điểm (I=${sectionTotals['I'] || 0}, II=${sectionTotals['II'] || 0}, III.1=${sectionTotals['III.1'] || 0}, III.2=${sIII2}).`;
     }
 
     return {
       isValid: isIValid && isIIValid && isIII1Valid && isIII2Valid && isGrandValid,
-      sectionIII2Max: sectionTotals['III.2'] || 0,
+      sectionIII2Max: sIII2,
       grandTotal,
       message,
     };

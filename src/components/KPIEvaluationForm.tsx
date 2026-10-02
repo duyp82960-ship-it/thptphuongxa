@@ -247,6 +247,12 @@ export const KPIEvaluationForm: React.FC<KPIEvaluationFormProps> = ({
     };
   }, [criteriaList, scores, level]);
 
+  const sectionIII2Max = useMemo(() => {
+    return criteriaList
+      .filter((c) => c.section === 'III.2')
+      .reduce((sum, c) => sum + Number(c.maxPoints || 0), 0);
+  }, [criteriaList]);
+
   // Handle direct score change (Requirement 7 & 19)
   const handleScoreChange = (criterionId: string, rawVal: number) => {
     const crit = criteriaList.find((c) => c.id === criterionId);
