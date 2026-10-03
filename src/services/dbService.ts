@@ -38,14 +38,25 @@ export interface DatabaseState {
 }
 
 /**
- * Remove undefined values from object so Firestore doesn't reject writes
+ * Recursively remove/sanitize undefined values so Firestore doesn't reject writes
  */
-export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): T {
+export function sanitizeForFirestore<T>(val: T): T {
+  if (val === undefined) {
+    return null as any;
+  }
+  if (val === null || typeof val !== 'object') {
+    return val;
+  }
+  if (Array.isArray(val)) {
+    return val.map((item) => sanitizeForFirestore(item)) as any;
+  }
   const result: Record<string, any> = {};
-  for (const key of Object.keys(obj)) {
-    const val = obj[key];
-    if (val !== undefined) {
-      result[key] = val;
+  for (const key of Object.keys(val as Record<string, any>)) {
+    const propVal = (val as Record<string, any>)[key];
+    if (propVal !== undefined) {
+      result[key] = sanitizeForFirestore(propVal);
+    } else {
+      result[key] = null;
     }
   }
   return result as T;
@@ -131,22 +142,45 @@ export async function initializeDatabaseIfNeeded(): Promise<DatabaseState> {
     }
 
     // 4. Fetch existing Evaluations from Firestore
-    const evalSnapshot = await getDocs(collection(db, EVALUATIONS_COLLECTION));
     let evaluationsList: TeacherKpiEvaluation[] = [];
-    if (!evalSnapshot.empty) {
-      evaluationsList = evalSnapshot.docs.map((docSnap) => {
-        const data = docSnap.data() as TeacherKpiEvaluation;
-        const matchingStaff = staffList.find((s) => s.id === data.staffId || s.code === data.staffCode);
-        if (matchingStaff) {
-          return {
-            ...data,
-            department: matchingStaff.department,
-            position: matchingStaff.position || data.position,
-            targetType: matchingStaff.type || data.targetType,
-          };
-        }
-        return data;
-      });
+    try {
+      const evalSnapshot = await getDocs(collection(db, EVALUATIONS_COLLECTION));
+      if (!evalSnapshot.empty) {
+        evaluationsList = evalSnapshot.docs.map((docSnap) => {
+          const raw = docSnap.data();
+          const data = { id: docSnap.id, ...raw } as TeacherKpiEvaluation;
+          const matchingStaff = staffList.find((s) => s.id === data.staffId || s.code === data.staffCode);
+          if (matchingStaff) {
+            return {
+              ...data,
+              department: matchingStaff.department,
+              position: data.position || matchingStaff.position,
+              targetType: data.targetType || matchingStaff.type,
+            };
+          }
+          return data;
+        });
+      }
+    } catch (err) {
+      console.warn('Error fetching evaluations from Firestore:', err);
+    }
+
+    // Merge with localStorage evaluations so recent evaluations are preserved
+    try {
+      const cached = localStorage.getItem(LOCAL_STORAGE_EVALUATIONS_KEY);
+      if (cached) {
+        const localList: TeacherKpiEvaluation[] = JSON.parse(cached);
+        localList.forEach((localItem) => {
+          const idx = evaluationsList.findIndex((e) => e.id === localItem.id);
+          if (idx >= 0) {
+            evaluationsList[idx] = { ...evaluationsList[idx], ...localItem };
+          } else {
+            evaluationsList.push(localItem);
+          }
+        });
+      }
+    } catch (cacheErr) {
+      console.warn('Error reading evaluations cache:', cacheErr);
     }
 
     // 5. Fetch existing Users from Firestore
@@ -331,9 +365,32 @@ export async function dbDeleteIncident(id: string): Promise<void> {
 
 // ==================== EVALUATIONS CRUD OPERATIONS ====================
 
+export const LOCAL_STORAGE_EVALUATIONS_KEY = 'thpt_phuong_xa_evaluations_v2';
+
 export async function dbSaveEvaluation(evalData: TeacherKpiEvaluation): Promise<void> {
-  const evalRef = doc(db, EVALUATIONS_COLLECTION, evalData.id);
-  await setDoc(evalRef, sanitizeForFirestore(evalData), { merge: true });
+  // 1. Immediately cache in localStorage for instant offline & reload resilience
+  try {
+    const cached = localStorage.getItem(LOCAL_STORAGE_EVALUATIONS_KEY);
+    let list: TeacherKpiEvaluation[] = cached ? JSON.parse(cached) : [];
+    const idx = list.findIndex((e) => e.id === evalData.id);
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], ...evalData };
+    } else {
+      list.unshift(evalData);
+    }
+    localStorage.setItem(LOCAL_STORAGE_EVALUATIONS_KEY, JSON.stringify(list));
+  } catch (localErr) {
+    console.warn('LocalStorage save warning:', localErr);
+  }
+
+  // 2. Persist to Firestore
+  try {
+    const evalRef = doc(db, EVALUATIONS_COLLECTION, evalData.id);
+    await setDoc(evalRef, sanitizeForFirestore(evalData), { merge: true });
+  } catch (firestoreErr) {
+    console.error('Firestore saveEvaluation error:', firestoreErr);
+    throw firestoreErr;
+  }
 }
 
 export async function dbDeleteEvaluation(id: string): Promise<void> {

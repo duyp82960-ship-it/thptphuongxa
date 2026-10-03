@@ -179,8 +179,12 @@ export function exportKpiEvaluationToExcel(params: {
   selfRank: string;
   deptRank?: string;
   bghRank?: string;
+  targetType?: 'bgh' | 'giaovien' | 'nhanvien';
 }) {
   const rows: any[] = [];
+  const isNhanVien =
+    params.targetType === 'nhanvien' ||
+    params.criteria.some((c) => c.section === 'A' || c.section === 'B');
 
   let periodText = 'KÌ I';
   if (params.evaluationPeriod === 'ki1') periodText = 'KÌ I (HỌC KÌ I)';
@@ -201,7 +205,7 @@ export function exportKpiEvaluationToExcel(params: {
   });
   rows.push({
     'STT': '',
-    'Nội dung đánh giá / nhiệm vụ chi tiết': `PHIẾU ĐÁNH GIÁ, CHẤM ĐIỂM KPI - KỲ ĐÁNH GIÁ: ${periodText} – NĂM HỌC ${params.schoolYear}`,
+    'Nội dung đánh giá / nhiệm vụ chi tiết': `PHIẾU ĐÁNH GIÁ, CHẤM ĐIỂM KPI ${isNhanVien ? 'NHÂN VIÊN' : ''} - KỲ ĐÁNH GIÁ: ${periodText} – NĂM HỌC ${params.schoolYear}`,
     'Điểm tối đa': '',
     'Cá nhân tự chấm': '',
     'Tổ chuyên môn đánh giá': '',
@@ -210,7 +214,7 @@ export function exportKpiEvaluationToExcel(params: {
   });
   rows.push({
     'STT': '',
-    'Nội dung đánh giá / nhiệm vụ chi tiết': `Họ và tên: ${params.teacherName} | Chức vụ/môn: ${params.position} ${params.subject ? `(${params.subject})` : ''} | Tổ: ${params.department}`,
+    'Nội dung đánh giá / nhiệm vụ chi tiết': `Họ và tên: ${params.teacherName} | Chức vụ/vị trí: ${params.position} ${params.subject ? `(${params.subject})` : ''} | Tổ: ${params.department}`,
     'Điểm tối đa': '',
     'Cá nhân tự chấm': '',
     'Tổ chuyên môn đánh giá': '',
@@ -220,15 +224,20 @@ export function exportKpiEvaluationToExcel(params: {
   rows.push({}); // Empty separator
 
   // Group by sections
-  const sections = [
-    { key: 'I', title: 'I. CHÍNH TRỊ TƯ TƯỞNG, ĐẠO ĐỨC LỐI SỐNG', max: 15 },
-    { key: 'II', title: 'II. TÁC PHONG, LỀ LỐI LÀM VIỆC, Ý THỨC TỔ CHỨC KỶ LUẬT', max: 15 },
-    { key: 'III.1', title: 'III.1 NĂNG LỰC VÀ KỸ NĂNG LÀM VIỆC', max: 10 },
-    { key: 'III.2', title: 'III.2 KẾT QUẢ THỰC HIỆN NHIỆM VỤ ĐƯỢC GIAO', max: 60 },
-  ];
+  const sections = isNhanVien
+    ? [
+        { key: 'A', title: 'A. KPI CHUNG – 30 ĐIỂM', max: 30 },
+        { key: 'B', title: `B. KPI VỊ TRÍ VIỆC LÀM: ${params.position.toUpperCase()} – 70 ĐIỂM`, max: 70 },
+      ]
+    : [
+        { key: 'I', title: 'I. CHÍNH TRỊ TƯ TƯỞNG, ĐẠO ĐỨC LỐI SỐNG', max: 15 },
+        { key: 'II', title: 'II. TÁC PHONG, LỀ LỐI LÀM VIỆC, Ý THỨC TỔ CHỨC KỶ LUẬT', max: 15 },
+        { key: 'III.1', title: 'III.1 NĂNG LỰC VÀ KỸ NĂNG LÀM VIỆC', max: 10 },
+        { key: 'III.2', title: 'III.2 KẾT QUẢ THỰC HIỆN NHIỆM VỤ ĐƯỢC GIAO', max: 60 },
+      ];
 
   sections.forEach((sec) => {
-    const items = params.criteria.filter((c) => c.section === sec.key || (!c.section && sec.key === 'III.2'));
+    const items = params.criteria.filter((c) => c.section === sec.key || (!c.section && sec.key === (isNhanVien ? 'B' : 'III.2')));
     let selfSub = 0;
     let deptSub = 0;
     let bghSub = 0;
@@ -291,9 +300,9 @@ export function exportKpiEvaluationToExcel(params: {
   ];
 
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Phieu_Danh_Gia_KPI');
+  XLSX.utils.book_append_sheet(wb, ws, isNhanVien ? 'KPI_Nhan_Vien' : 'Phieu_Danh_Gia_KPI');
   const safeName = params.teacherName.replace(/\s+/g, '_');
-  XLSX.writeFile(wb, `Phieu_KPI_${safeName}_${params.schoolYear.replace(/\s+/g, '')}.xlsx`);
+  XLSX.writeFile(wb, `Phieu_KPI_${isNhanVien ? 'NV_' : ''}${safeName}_${params.schoolYear.replace(/\s+/g, '')}.xlsx`);
 }
 
 /**
@@ -341,11 +350,15 @@ export function exportKpiEvaluationToWord(params: {
   deptDate?: string;
   bghDate?: string;
 }) {
+  const isNhanVien =
+    params.targetType === 'nhanvien' ||
+    params.criteria.some((c) => c.section === 'A' || c.section === 'B');
+
   const targetTitle =
     params.targetType === 'bgh'
       ? 'CÁN BỘ QUẢN LÝ'
-      : params.targetType === 'nhanvien'
-      ? 'NHÂN VIÊN VĂN PHÒNG'
+      : isNhanVien
+      ? 'NHÂN VIÊN'
       : 'GIÁO VIÊN';
 
   let periodText = 'KÌ I';
@@ -360,26 +373,28 @@ export function exportKpiEvaluationToWord(params: {
   const todayStr = new Date().toLocaleDateString('vi-VN');
 
   // Define official sections for THPT Phương Xá KPI sheets
-  const officialSections = [
-    { key: 'I', title: 'I. CHÍNH TRỊ TƯ TƯỞNG, ĐẠO ĐỨC LỐI SỐNG', max: 15 },
-    { key: 'II', title: 'II. TÁC PHONG, LỀ LỐI LÀM VIỆC, Ý THỨC TỔ CHỨC KỶ LUẬT', max: 15 },
-    { key: 'III.1', title: 'III.1 NĂNG LỰC VÀ KỸ NĂNG LÀM VIỆC', max: 10 },
-    {
-      key: 'III.2',
-      title:
-        params.targetType === 'nhanvien'
-          ? 'III.2 KẾT QUẢ THỰC HIỆN NHIỆM VỤ ĐƯỢC GIAO (NHÂN VIÊN VĂN PHÒNG)'
-          : 'III.2 KẾT QUẢ THỰC HIỆN NHIỆM VỤ ĐƯỢC GIAO',
-      max: 60,
-    },
-  ];
+  const officialSections = isNhanVien
+    ? [
+        { key: 'A', title: 'A. KPI CHUNG – 30 ĐIỂM', max: 30 },
+        { key: 'B', title: `B. KPI VỊ TRÍ VIỆC LÀM: ${params.position.toUpperCase()} – 70 ĐIỂM`, max: 70 },
+      ]
+    : [
+        { key: 'I', title: 'I. CHÍNH TRỊ TƯ TƯỞNG, ĐẠO ĐỨC LỐI SỐNG', max: 15 },
+        { key: 'II', title: 'II. TÁC PHONG, LỀ LỐI LÀM VIỆC, Ý THỨC TỔ CHỨC KỶ LUẬT', max: 15 },
+        { key: 'III.1', title: 'III.1 NĂNG LỰC VÀ KỸ NĂNG LÀM VIỆC', max: 10 },
+        {
+          key: 'III.2',
+          title: 'III.2 KẾT QUẢ THỰC HIỆN NHIỆM VỤ ĐƯỢC GIAO',
+          max: 60,
+        },
+      ];
 
   let criteriaRowsHtml = '';
 
   officialSections.forEach((sec) => {
     // Find all criteria belonging to this section key
     const secItems = params.criteria.filter(
-      (c) => c.section === sec.key || (!c.section && sec.key === 'III.2')
+      (c) => c.section === sec.key || (!c.section && sec.key === (isNhanVien ? 'B' : 'III.2'))
     );
 
     // Calculate section subtotals
@@ -712,6 +727,362 @@ export function exportKpiEvaluationToWord(params: {
   const cleanStaffName = params.teacherName.replace(/\s+/g, '_');
   const cleanYear = params.schoolYear.replace(/\s+/g, '');
   const fileName = `Phieu_KPI_${cleanStaffName}_T${params.month || 9}_${cleanYear}.doc`;
+
+  link.href = url;
+  link.setAttribute('download', fileName);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Xuất sổ bộ tập hợp phiếu KPI của nhiều nhân viên (hoặc toàn bộ nhân viên) vào 1 file Word (.doc) duy nhất.
+ * Mỗi nhân viên là 1 trang/phiếu riêng biệt với đầy đủ Quốc hiệu, thông tin, bảng 30đ chung + 70đ vị trí, điểm số và chữ ký.
+ */
+export function exportMultipleStaffKpiToSingleWord(
+  staffListParams: Array<{
+    schoolName: string;
+    teacherName: string;
+    staffCode: string;
+    position: string;
+    department: string;
+    schoolYear: string;
+    evaluationPeriod?: string;
+    periodName?: string;
+    month?: number;
+    year?: number;
+    evaluatorName?: string;
+    targetType?: string;
+    criteria: Array<{
+      id: string;
+      section?: string;
+      order: number;
+      content: string;
+      maxPoints: number;
+      groupTitle?: string;
+    }>;
+    scores: Record<
+      string,
+      {
+        selfScore: number;
+        deptScore?: number;
+        bghScore?: number;
+        isNa?: boolean;
+        evidence?: string;
+      }
+    >;
+    selfTotal: number;
+    deptTotal?: number;
+    bghTotal?: number;
+    selfRank?: string;
+    deptRank?: string;
+    bghRank?: string;
+  }>,
+  customFileName?: string
+) {
+  if (!staffListParams || staffListParams.length === 0) return;
+
+  const schoolName = staffListParams[0].schoolName || 'TRƯỜNG THPT PHƯƠNG XÁ';
+  const schoolYear = staffListParams[0].schoolYear || '2026 - 2027';
+
+  let sectionsHtml = '';
+
+  staffListParams.forEach((params, idx) => {
+    const isNhanVien = true;
+    let periodText = 'KÌ I';
+    if (params.evaluationPeriod === 'ki1') periodText = 'KÌ I (HỌC KÌ I)';
+    else if (params.evaluationPeriod === 'ki2') periodText = 'KÌ II (HỌC KÌ II)';
+    else if (params.evaluationPeriod === 'canam') periodText = 'CẢ NĂM HỌC';
+    else if (params.periodName) periodText = params.periodName.toUpperCase();
+    else if (params.month) periodText = `THÁNG ${String(params.month).padStart(2, '0')}/${params.year || 2026}`;
+
+    const periodString = `KỲ ĐÁNH GIÁ: ${periodText} – NĂM HỌC ${params.schoolYear}`;
+
+    const officialSections = [
+      { key: 'A', title: 'A. KPI CHUNG – 30 ĐIỂM (Áp dụng toàn thể nhân viên Tổ Văn phòng)', max: 30 },
+      { key: 'B', title: `B. KPI VỊ TRÍ VIỆC LÀM: ${params.position.toUpperCase()} – 70 ĐIỂM`, max: 70 },
+    ];
+
+    let criteriaRowsHtml = '';
+
+    officialSections.forEach((sec) => {
+      const secItems = params.criteria.filter(
+        (c) => c.section === sec.key || (!c.section && sec.key === 'B')
+      );
+
+      let selfSub = 0;
+      let bghSub = 0;
+      const secMax = secItems.reduce((acc, c) => acc + c.maxPoints, 0) || sec.max;
+
+      secItems.forEach((item) => {
+        const sc = params.scores[item.id];
+        if (!sc?.isNa) {
+          selfSub += sc?.selfScore ?? item.maxPoints;
+          bghSub += sc?.bghScore ?? sc?.deptScore ?? item.maxPoints;
+        }
+      });
+
+      selfSub = Math.round(selfSub * 10) / 10;
+      bghSub = Math.round(bghSub * 10) / 10;
+
+      criteriaRowsHtml += `
+        <tr style="background-color: #f1f5f9; font-weight: bold; font-size: 11pt;">
+          <td style="text-align: center; border: 1px solid #000; padding: 6px; font-weight: bold;">${sec.key}</td>
+          <td style="border: 1px solid #000; padding: 6px; font-weight: bold; text-transform: uppercase; color: #0f172a;">
+            ${sec.title}
+          </td>
+          <td style="text-align: center; border: 1px solid #000; padding: 6px; font-weight: bold;">${secMax}</td>
+          <td style="text-align: center; border: 1px solid #000; padding: 6px; font-weight: bold; color: #1e3a8a;">${selfSub} đ</td>
+          <td style="text-align: center; border: 1px solid #000; padding: 6px; font-weight: bold; color: #065f46;">${bghSub} đ</td>
+          <td style="border: 1px solid #000; padding: 6px; font-style: italic; font-size: 10pt;">Tối đa ${secMax} điểm</td>
+        </tr>
+      `;
+
+      secItems.forEach((crit) => {
+        const sc = params.scores[crit.id];
+        const isNa = Boolean(sc?.isNa);
+        const selfVal = isNa ? 'N/A' : (sc?.selfScore ?? crit.maxPoints);
+        const bghVal = isNa ? 'N/A' : (sc?.bghScore ?? sc?.deptScore ?? crit.maxPoints);
+        const evidence = sc?.evidence || '';
+
+        criteriaRowsHtml += `
+          <tr ${isNa ? 'style="background-color: #f8fafc;"' : ''}>
+            <td style="text-align: center; border: 1px solid #000; padding: 5px;">${crit.order}</td>
+            <td style="border: 1px solid #000; padding: 5px;">
+              ${crit.groupTitle ? `<div style="font-size: 10pt; font-weight: bold; color: #1e3a8a; margin-bottom: 2px;">[${crit.groupTitle}]</div>` : ''}
+              <div>${crit.content}</div>
+            </td>
+            <td style="text-align: center; border: 1px solid #000; padding: 5px; font-weight: bold;">${crit.maxPoints}</td>
+            <td style="text-align: center; border: 1px solid #000; padding: 5px; font-weight: bold; color: #1e3a8a;">${selfVal}</td>
+            <td style="text-align: center; border: 1px solid #000; padding: 5px; font-weight: bold; color: #065f46;">${bghVal}</td>
+            <td style="border: 1px solid #000; padding: 5px; font-size: 10pt;">${evidence}</td>
+          </tr>
+        `;
+      });
+    });
+
+    const isLast = idx === staffListParams.length - 1;
+
+    sectionsHtml += `
+      <div class="staff-kpi-page" style="${!isLast ? 'page-break-after: always; mso-break-type: section-break; margin-bottom: 40px;' : ''}">
+        <!-- National Header -->
+        <table class="header-tbl">
+          <tr>
+            <td style="width: 45%;">
+              <div style="font-weight: bold; text-transform: uppercase; font-size: 11pt;">SỞ GD&ĐT PHÚ THỌ</div>
+              <div style="font-weight: bold; text-transform: uppercase; font-size: 12pt;">${schoolName.toUpperCase()}</div>
+              <div style="width: 100px; height: 1px; background: #000; margin: 3px auto;"></div>
+            </td>
+            <td style="width: 55%;">
+              <div style="font-weight: bold; text-transform: uppercase; font-size: 11pt;">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+              <div style="font-weight: bold; font-style: italic; font-size: 12pt;">Độc lập – Tự do – Hạnh phúc</div>
+              <div style="width: 130px; height: 1px; background: #000; margin: 3px auto;"></div>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Document Title -->
+        <div class="doc-title">PHIẾU ĐÁNH GIÁ, CHẤM ĐIỂM KPI NHÂN VIÊN</div>
+        <div class="doc-subtitle">VỊ TRÍ VIỆC LÀM: ${params.position.toUpperCase()}</div>
+        <div style="text-align: center; font-weight: bold; font-size: 11pt; margin-bottom: 15px; color: #334155;">
+          ${periodString}
+        </div>
+
+        <!-- Staff Profile Info Table -->
+        <table class="info-tbl">
+          <tr>
+            <td style="width: 20%; font-weight: bold; background-color: #f8fafc;">Họ và tên:</td>
+            <td style="width: 35%; font-weight: bold; font-size: 13pt; color: #0f172a;">${params.teacherName.toUpperCase()}</td>
+            <td style="width: 20%; font-weight: bold; background-color: #f8fafc;">Mã nhân viên:</td>
+            <td style="width: 25%; font-weight: bold;">${params.staffCode}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8fafc;">Chức danh / Vị trí:</td>
+            <td style="font-weight: bold; color: #1e3a8a;">${params.position}</td>
+            <td style="font-weight: bold; background-color: #f8fafc;">Tổ / Bộ phận:</td>
+            <td>Tổ Văn phòng</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; background-color: #f8fafc;">Người đánh giá:</td>
+            <td>${params.evaluatorName || 'Ban Giám hiệu & Tổ trưởng Văn phòng'}</td>
+            <td style="font-weight: bold; background-color: #f8fafc;">Cấu trúc điểm:</td>
+            <td>30đ KPI chung + 70đ KPI vị trí</td>
+          </tr>
+        </table>
+
+        <!-- Main KPI Criteria Table -->
+        <table class="kpi-tbl">
+          <thead>
+            <tr>
+              <th style="width: 6%;">STT</th>
+              <th style="width: 46%;">Nội dung tiêu chí đánh giá KPI</th>
+              <th style="width: 10%;">Điểm tối đa</th>
+              <th style="width: 12%;">Cá nhân tự chấm</th>
+              <th style="width: 12%;">BGH chấm</th>
+              <th style="width: 14%;">Minh chứng / Ghi chú</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${criteriaRowsHtml}
+            <!-- Total Summary Row -->
+            <tr style="background-color: #e2e8f0; font-weight: bold;">
+              <td style="text-align: center; border: 1px solid #000; padding: 8px;" colSpan="2">
+                TỔNG ĐIỂM KPI (THANG ĐIỂM 100 CHUẨN)
+              </td>
+              <td style="text-align: center; border: 1px solid #000; padding: 8px;">100</td>
+              <td style="text-align: center; border: 1px solid #000; padding: 8px; color: #1e3a8a;">${params.selfTotal} đ</td>
+              <td style="text-align: center; border: 1px solid #000; padding: 8px; color: #065f46;">${params.bghTotal ?? params.selfTotal} đ</td>
+              <td style="border: 1px solid #000; padding: 8px;">
+                Xếp loại: <b>${params.bghRank || params.selfRank}</b>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Date line -->
+        <div style="text-align: right; font-style: italic; margin-top: 15px; margin-bottom: 10px;">
+          Phương Xá, ngày ${new Date().getDate()} tháng ${new Date().getMonth() + 1} năm ${new Date().getFullYear()}
+        </div>
+
+        <!-- Signatures Table -->
+        <table class="sig-tbl">
+          <tr>
+            <td>
+              <div style="font-weight: bold; text-transform: uppercase;">NGƯỜI TỰ ĐÁNH GIÁ</div>
+              <div style="font-style: italic; font-size: 10pt;">(Ký và ghi rõ họ tên)</div>
+              <div style="height: 65px;"></div>
+              <div style="font-weight: bold;">${params.teacherName}</div>
+            </td>
+            <td>
+              <div style="font-weight: bold; text-transform: uppercase;">TỔ TRƯỞNG VĂN PHÒNG</div>
+              <div style="font-style: italic; font-size: 10pt;">(Ký và ghi rõ họ tên)</div>
+              <div style="height: 65px;"></div>
+              <div style="font-weight: bold;">Hoàng Mỹ Hạnh</div>
+            </td>
+            <td>
+              <div style="font-weight: bold; text-transform: uppercase;">HIỆU TRƯỞNG PHÊ DUYỆT</div>
+              <div style="font-style: italic; font-size: 10pt;">(Ký tên và đóng dấu)</div>
+              <div style="height: 65px;"></div>
+              <div style="font-weight: bold;">Thầy Lê Quốc Tuấn</div>
+            </td>
+          </tr>
+        </table>
+      </div>
+    `;
+  });
+
+  const wordContent = `
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+xmlns:w="urn:schemas-microsoft-com:office:word"
+xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<title>So_Bo_Phieu_KPI_Nhan_Vien</title>
+<!--[if gte mso 9]>
+<xml>
+ <w:WordDocument>
+  <w:View>Print</w:View>
+  <w:Zoom>100</w:Zoom>
+ </w:WordDocument>
+</xml>
+<![endif]-->
+<style>
+  @page Section1 {
+    size: 21.0cm 29.7cm;
+    margin: 2.0cm 2.0cm 2.0cm 2.5cm;
+    mso-header-margin: 36.0pt;
+    mso-footer-margin: 36.0pt;
+    mso-paper-source: 0;
+  }
+  div.Section1 { page: Section1; }
+  body {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 13pt;
+    line-height: 1.3;
+    color: #000000;
+  }
+  table.header-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+  }
+  table.header-tbl td {
+    vertical-align: top;
+    text-align: center;
+  }
+  .doc-title {
+    text-align: center;
+    font-weight: bold;
+    font-size: 16pt;
+    text-transform: uppercase;
+    margin-top: 10px;
+    margin-bottom: 5px;
+  }
+  .doc-subtitle {
+    text-align: center;
+    font-weight: bold;
+    font-size: 14pt;
+    color: #0f2d59;
+    margin-bottom: 15px;
+  }
+  table.info-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid #000000;
+    margin-bottom: 20px;
+  }
+  table.info-tbl td {
+    padding: 6px 10px;
+    border: 1px solid #000000;
+    font-size: 12pt;
+  }
+  table.kpi-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+  }
+  table.kpi-tbl th {
+    border: 1px solid #000000;
+    padding: 8px 5px;
+    background-color: #f1f5f9;
+    font-weight: bold;
+    text-align: center;
+    font-size: 11pt;
+  }
+  table.kpi-tbl td {
+    border: 1px solid #000000;
+    padding: 6px 6px;
+    font-size: 11pt;
+  }
+  table.sig-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 30px;
+  }
+  table.sig-tbl td {
+    text-align: center;
+    vertical-align: top;
+    width: 33.33%;
+  }
+</style>
+</head>
+<body>
+<div class="Section1">
+  ${sectionsHtml}
+</div>
+</body>
+</html>
+  `;
+
+  const blob = new Blob(['\uFEFF' + wordContent], {
+    type: 'application/msword;charset=utf-8;',
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const fileName =
+    customFileName ||
+    `So_Bo_Phieu_KPI_Tat_Ca_Nhan_Vien_${schoolYear.replace(/\s+/g, '')}.doc`;
 
   link.href = url;
   link.setAttribute('download', fileName);

@@ -239,7 +239,20 @@ export const KpiProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [staffList, setStaffList] = useState<StaffMember[]>(INITIAL_STAFF);
   const [criteriaList, setCriteriaList] = useState<KpiCriterion[]>(INITIAL_CRITERIA);
   const [incidentsList, setIncidentsList] = useState<KpiIncident[]>(INITIAL_INCIDENTS);
-  const [evaluationsList, setEvaluationsList] = useState<TeacherKpiEvaluation[]>(INITIAL_EVALUATIONS);
+  const [evaluationsList, setEvaluationsList] = useState<TeacherKpiEvaluation[]>(() => {
+    try {
+      const cached = localStorage.getItem('thpt_phuong_xa_evaluations_v2');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error('Error loading initial cached evaluations:', e);
+    }
+    return INITIAL_EVALUATIONS;
+  });
   const [trackingList, setTrackingList] = useState<TaskTrackingRecord[]>([]);
   const [leaveRequestsList, setLeaveRequestsList] = useState<LeaveRequest[]>(INITIAL_LEAVE_REQUESTS);
   const [isDbLoading, setIsDbLoading] = useState<boolean>(true);
@@ -1093,6 +1106,7 @@ export const KpiProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       updatedAt: new Date().toISOString(),
     };
 
+    let finalEvalList: TeacherKpiEvaluation[] = [];
     setEvaluationsList((prev) => {
       // 1. Try matching by exact ID first
       let idx = prev.findIndex((e) => e.id === updatedEval.id);
@@ -1108,30 +1122,39 @@ export const KpiProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         );
       }
 
-      // 3. Fallback matching by staffId + schoolYear
+      // 3. Fallback matching by staffId + schoolYear (only if targetType matches)
       if (idx < 0) {
         idx = prev.findIndex(
-          (e) => e.staffId === updatedEval.staffId && e.schoolYear === updatedEval.schoolYear
+          (e) => e.staffId === updatedEval.staffId && e.targetType === updatedEval.targetType && e.schoolYear === updatedEval.schoolYear
         );
       }
 
       if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = {
-          ...next[idx],
+        finalEvalList = [...prev];
+        finalEvalList[idx] = {
+          ...finalEvalList[idx],
           ...updatedEval,
         };
-        return next;
+      } else {
+        finalEvalList = [updatedEval, ...prev];
       }
-      return [updatedEval, ...prev];
+
+      try {
+        localStorage.setItem('thpt_phuong_xa_evaluations_v2', JSON.stringify(finalEvalList));
+      } catch (localErr) {
+        console.warn('LocalStorage save error:', localErr);
+      }
+
+      return finalEvalList;
     });
 
     try {
       await dbSaveEvaluation(updatedEval);
       showToast(`Đã lưu thành công điểm KPI của ${evalData.staffName}!`, 'success');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving evaluation to database:', err);
-      showToast(`Lỗi khi lưu phiếu KPI vào Database`, 'warning');
+      showToast(`Lỗi khi lưu phiếu KPI vào Database: ${err?.message || err}`, 'warning');
+      throw err;
     }
   };
 

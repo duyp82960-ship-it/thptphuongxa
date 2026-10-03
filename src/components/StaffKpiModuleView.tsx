@@ -11,6 +11,7 @@ import {
   calculateKpiRank,
   KPI_OFFICE_PRINCIPLES,
   KpiCriterionItem,
+  getOfficialStaffCriteria,
 } from '../data/kpiEvaluationTemplates';
 import {
   Briefcase,
@@ -47,7 +48,7 @@ import {
   Target,
   Calendar,
 } from 'lucide-react';
-import { getRankBadgeClass, exportKpiEvaluationToWord } from '../utils/exportUtils';
+import { getRankBadgeClass, exportKpiEvaluationToWord, exportKpiEvaluationToExcel } from '../utils/exportUtils';
 import * as XLSX from 'xlsx';
 import {
   StaffRankingTier,
@@ -67,6 +68,7 @@ import { StaffPrintListModal } from './StaffPrintListModal';
 import { StaffCriteriaManagementModal } from './StaffCriteriaManagementModal';
 import { StaffAddCriterionModal } from './StaffAddCriterionModal';
 import { StaffEditCriteriaModal } from './StaffEditCriteriaModal';
+import { StaffExportKpiFormsModal } from './StaffExportKpiFormsModal';
 import { dbBulkDeleteEvaluations } from '../services/dbService';
 
 interface StaffKpiModuleViewProps {
@@ -389,6 +391,7 @@ export const StaffKpiModuleView: React.FC<StaffKpiModuleViewProps> = ({ evaluati
   const [sheetPositionKey, setSheetPositionKey] = useState<string>('ketoan');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isExportFormsModalOpen, setIsExportFormsModalOpen] = useState(false);
 
   const isUserBgh = useMemo(() => {
     if (isBgh || (currentUser as any)?.role === 'admin') return true;
@@ -519,7 +522,7 @@ export const StaffKpiModuleView: React.FC<StaffKpiModuleViewProps> = ({ evaluati
   const [evalMonthState, setEvalMonthState] = useState<number>(9);
   const [evalYearState, setEvalYearState] = useState<number>(2026);
 
-  // Sync scores when entering Sheet mode
+  // Sync scores when entering Sheet mode or changing active evaluation
   useEffect(() => {
     if (!currentEvalRecord) return;
     const pKey = detectStaffPositionKey(currentEvalRecord.position);
@@ -535,7 +538,7 @@ export const StaffKpiModuleView: React.FC<StaffKpiModuleViewProps> = ({ evaluati
     setDeptNote(currentEvalRecord.department_comment || currentEvalRecord.ttcm_comment || '');
     setBghNote(currentEvalRecord.bgh_comment || '');
 
-    // Bảo toàn đúng người đánh giá đã lưu lúc tạo phiếu (Requirement 7)
+    // Bảo toàn đúng người đánh giá đã lưu lúc tạo phiếu
     const savedEvalId =
       (currentEvalRecord as any).evaluator_id ||
       currentEvalRecord.evaluatorId ||
@@ -559,7 +562,7 @@ export const StaffKpiModuleView: React.FC<StaffKpiModuleViewProps> = ({ evaluati
     if (currentEvalRecord.scores && Object.keys(currentEvalRecord.scores).length > 0) {
       setScores(currentEvalRecord.scores);
     } else {
-      // Initialize with 0 for self and undefined for bgh (Requirement 3)
+      // Initialize with 0 for self and undefined for bgh
       const init: TeacherKpiEvaluation['scores'] = {};
       sheetCriteriaList.forEach((c) => {
         init[c.id] = {
@@ -572,7 +575,7 @@ export const StaffKpiModuleView: React.FC<StaffKpiModuleViewProps> = ({ evaluati
       });
       setScores(init);
     }
-  }, [currentEvalRecord?.id, sheetCriteriaList, allAvailableEvaluators]);
+  }, [currentEvalRecord?.id]);
 
   // Người đánh giá đang được chọn trong chế độ xem/chấm phiếu
   const currentSheetEvaluator = useMemo<EvaluatorOption | undefined>(() => {
@@ -1136,10 +1139,60 @@ export const StaffKpiModuleView: React.FC<StaffKpiModuleViewProps> = ({ evaluati
     showToast(`Đã thêm nhân viên ${newStaff.name} vào vị trí ${modalSelectedPositionDef.name}!`, 'success');
   };
 
-  // Save changes to current evaluation record
+  // Save changes to current evaluation record (BGH & Staff evaluation saving)
   const handleSaveEvaluation = async (newStatus?: TeacherKpiEvaluation['status']) => {
-    if (!currentEvalRecord || !activeStaff) return;
+    if (!currentEvalRecord || !activeStaff) {
+      showToast('❌ Không tìm thấy thông tin phiếu hoặc nhân viên đang đánh giá!', 'error');
+      return;
+    }
+
     const finalStatus = newStatus || status || 'draft';
+    const employeeId = activeStaff.id || currentEvalRecord.staffId;
+    const evaluationId =
+      currentEvalRecord.id ||
+      `eval-staff-${employeeId}-${evalPeriodState}-${evalPeriodState === 'thang' ? evalMonthState : ''}-${evalYearState}`;
+
+    // 1. Calculate scores independently for Section A (30đ) and Section B (70đ)
+    let bghKpiChungScore = 0;
+    let bghKpiViTriScore = 0;
+    let selfKpiChungScore = 0;
+    let selfKpiViTriScore = 0;
+
+    sheetGeneralCriteria.forEach((crit) => {
+      const sc = scores[crit.id];
+      const isNa = Boolean(sc?.isNa);
+      const sVal = isNa ? 0 : Number(sc?.selfScore ?? 0);
+      selfKpiChungScore += sVal;
+      if (sc?.bghScore !== undefined && sc?.bghScore !== null && !isNaN(Number(sc.bghScore))) {
+        bghKpiChungScore += Number(sc.bghScore);
+      }
+    });
+
+    sheetPositionCriteria.forEach((crit) => {
+      const sc = scores[crit.id];
+      const isNa = Boolean(sc?.isNa);
+      const sVal = isNa ? 0 : Number(sc?.selfScore ?? 0);
+      selfKpiViTriScore += sVal;
+      if (sc?.bghScore !== undefined && sc?.bghScore !== null && !isNaN(Number(sc.bghScore))) {
+        bghKpiViTriScore += Number(sc.bghScore);
+      }
+    });
+
+    bghKpiChungScore = Math.min(30, Math.round(bghKpiChungScore * 10) / 10);
+    bghKpiViTriScore = Math.min(70, Math.round(bghKpiViTriScore * 10) / 10);
+    selfKpiChungScore = Math.min(30, Math.round(selfKpiChungScore * 10) / 10);
+    selfKpiViTriScore = Math.min(70, Math.round(selfKpiViTriScore * 10) / 10);
+
+    // Total score calculation (Requirement 5: bghTotalScore = bghKpiChungScore + bghKpiViTriScore)
+    const bghTotalScore = Math.min(100, Math.round((bghKpiChungScore + bghKpiViTriScore) * 10) / 10);
+    const selfTotalScore = Math.min(100, Math.round((selfKpiChungScore + selfKpiViTriScore) * 10) / 10);
+
+    // Ranking calculation (Requirement 6: 90-100: xuất sắc, 80-<90: tốt, 65-<80: hoàn thành, <65: không hoàn thành)
+    const finalSelfRank = calculateStaffRank(selfTotalScore, rankingTiers);
+    const finalBghRank = calculateStaffRank(bghTotalScore, rankingTiers);
+
+    const finalBghDate = bghDate || new Date().toISOString().split('T')[0];
+    const finalEvaluatedAt = new Date().toISOString();
 
     const savedRole =
       currentSheetEvaluator?.category === 'TOTRUONG'
@@ -1150,11 +1203,66 @@ export const StaffKpiModuleView: React.FC<StaffKpiModuleViewProps> = ({ evaluati
 
     const isTt = currentSheetEvaluator?.category === 'TOTRUONG';
 
+    // 2. Sanitize scores per criterion with details (Requirement 4)
+    const cleanScores: Record<string, any> = {};
+    sheetCriteriaList.forEach((c) => {
+      const sc = scores[c.id];
+      const isNa = Boolean(sc?.isNa);
+      const sVal = isNa ? 0 : Number(sc?.selfScore ?? 0);
+      const bVal =
+        sc?.bghScore !== undefined && sc?.bghScore !== null && !isNaN(Number(sc.bghScore))
+          ? Number(sc.bghScore)
+          : null;
+
+      cleanScores[c.id] = {
+        criterionId: c.id,
+        selfScore: sVal,
+        bghScore: bVal,
+        bghComment: sc?.evidence || sc?.bghComment || '',
+        evaluatorId: currentSheetEvaluator?.id || 'bgh-01',
+        isNa,
+        evidence: sc?.evidence || '',
+      };
+    });
+
+    // 3. Assemble complete updated evaluation record (Requirement 2 & 3 & 4)
     const updatedRecord: TeacherKpiEvaluation = {
       ...currentEvalRecord,
-      scores,
-      evaluatorId: currentSheetEvaluator?.id || currentEvalRecord.evaluatorId,
-      evaluator_id: currentSheetEvaluator?.id || currentEvalRecord.evaluator_id,
+      id: evaluationId,
+      evaluationId,
+      formId: evaluationId,
+      kpiFormId: evaluationId,
+      staffId: employeeId,
+      employeeId,
+      employee_id: employeeId,
+      staffCode: activeStaff.code,
+      staffName: activeStaff.name,
+      full_name: activeStaff.name,
+      position: activePositionDef.name || activeStaff.position,
+      job_position_name: activePositionDef.name || activeStaff.position,
+      department: activeStaff.department || 'Tổ Văn phòng',
+      department_id: 'to-van-phong',
+      departmentName: activeStaff.department || 'Tổ Văn phòng',
+      targetType: 'nhanvien',
+      schoolYear: currentEvalRecord.schoolYear || schoolYear,
+      evaluationPeriod: evalPeriodState,
+      periodName:
+        currentEvalRecord.periodName ||
+        (evalPeriodState === 'thang'
+          ? `Tháng ${String(evalMonthState).padStart(2, '0')}/${evalYearState}`
+          : evalPeriodState === 'ki1'
+          ? 'Kì I'
+          : evalPeriodState === 'ki2'
+          ? 'Kì II'
+          : 'Cả năm'),
+      month: evalPeriodState === 'thang' ? evalMonthState : undefined,
+      year: evalYearState,
+
+      scores: cleanScores,
+
+      // Evaluator Information
+      evaluatorId: currentSheetEvaluator?.id || currentEvalRecord.evaluatorId || 'bgh-1',
+      evaluator_id: currentSheetEvaluator?.id || currentEvalRecord.evaluator_id || 'bgh-1',
       evaluatorName: currentSheetEvaluator
         ? `${currentSheetEvaluator.name} – ${currentSheetEvaluator.position}`
         : currentEvalRecord.evaluatorName,
@@ -1184,31 +1292,136 @@ export const StaffKpiModuleView: React.FC<StaffKpiModuleViewProps> = ({ evaluati
             bgh_evaluator_name: currentSheetEvaluator?.name || currentEvalRecord.bgh_evaluator_name,
             bgh_evaluator_role: currentSheetEvaluator?.position || currentEvalRecord.bgh_evaluator_role,
           }),
-      selfTotalScore: scoreBreakdowns.total.self,
-      bghTotalScore: scoreBreakdowns.total.bgh ?? 0,
-      personal_score: scoreBreakdowns.total.self,
-      bgh_score: scoreBreakdowns.total.bgh ?? 0,
-      selfRank,
-      bghRank,
-      status: finalStatus,
-      selfDate,
-      deptDate: deptDate || (finalStatus !== 'draft' ? new Date().toISOString().split('T')[0] : ''),
-      bghDate: bghDate || (finalStatus === 'bgh_approved' ? new Date().toISOString().split('T')[0] : ''),
+
+      // Independent self score & rating (Requirement 3: không ghi đè self_score bằng bgh_score)
+      selfTotalScore,
+      self_score: selfTotalScore,
+      personal_score: selfTotalScore,
+      self_rating: finalSelfRank,
+      selfRank: finalSelfRank,
       selfRankNote: selfNote,
       personal_comment: selfNote,
+      selfDate,
+      deptDate: deptDate || (finalStatus !== 'draft' ? new Date().toISOString().split('T')[0] : ''),
       department_comment: deptNote,
       ttcm_comment: deptNote,
+
+      // Independent BGH score & rating (Requirement 3 & 4: tách riêng, lưu chi tiết điểm)
+      bghTotalScore,
+      bgh_score: bghTotalScore,
+      bgh_total_score: bghTotalScore,
+      bgh_kpi_chung_score: bghKpiChungScore,
+      bgh_kpi_vi_tri_score: bghKpiViTriScore,
+      partA_bgh_score: bghKpiChungScore,
+      partB_bgh_score: bghKpiViTriScore,
+      bgh_rating: finalBghRank,
+      bghRank: finalBghRank,
       bgh_comment: bghNote,
-      updatedAt: new Date().toISOString(),
+      bghComment: bghNote,
+      bghDate: finalBghDate,
+      bgh_evaluated_at: finalEvaluatedAt,
+      bghEvaluatedAt: finalEvaluatedAt,
+
+      status: finalStatus,
+      updatedAt: finalEvaluatedAt,
     };
 
-    saveEvaluation(updatedRecord);
-    setCurrentEvalRecord(updatedRecord);
-    setStatus(finalStatus);
-    showToast(`Đã lưu phiếu đánh giá KPI của ${activeStaff.name} thành công!`, 'success');
+    try {
+      await saveEvaluation(updatedRecord);
+      setCurrentEvalRecord(updatedRecord);
+      setStatus(finalStatus);
+
+      if (newStatus === 'completed') {
+        showToast('✓ Đã hoàn tất đánh giá và lưu kết quả BGH thành công.', 'success');
+      } else if (newStatus === 'bgh_approved') {
+        showToast('💾 Đã lưu kết quả đánh giá BGH thành công.', 'success');
+      } else {
+        showToast(`Đã lưu phiếu đánh giá KPI của ${activeStaff.name} thành công!`, 'success');
+      }
+    } catch (err: any) {
+      console.error('Lỗi khi lưu kết quả BGH:', err);
+      showToast(`Không thể lưu kết quả BGH: ${err?.message || err}`, 'error');
+    }
   };
 
-  // Export to Excel for Current Staff
+  // Export single evaluation sheet directly to Microsoft Word (.doc) without state delay
+  const exportEvaluationItemToWord = (item: TeacherKpiEvaluation) => {
+    const pKey = detectStaffPositionKey(item.position);
+    const official = getOfficialStaffCriteria(item.position || pKey);
+    const criteriaToUse =
+      item.criteria_snapshot && item.criteria_snapshot.length > 0
+        ? (item.criteria_snapshot as KpiCriterionItem[])
+        : official.allCriteria;
+
+    exportKpiEvaluationToWord({
+      schoolName: schoolConfig.fullName || 'TRƯỜNG THPT PHƯƠNG XÁ',
+      teacherName: item.staffName,
+      staffCode: item.staffCode,
+      position: item.position || official.positionDef.name,
+      department: 'Tổ Văn phòng',
+      schoolYear: item.schoolYear || schoolYear,
+      evaluationPeriod: item.evaluationPeriod,
+      periodName: item.periodName || 'Tháng 09/2026',
+      month: item.month || 9,
+      year: item.year || 2026,
+      evaluatorName: item.evaluatorName || item.evaluator_name || 'Ban Giám hiệu',
+      targetType: 'nhanvien',
+      criteria: criteriaToUse.map((c) => ({
+        id: c.id,
+        section: c.section || (c.id.startsWith('NV-A') ? 'A' : 'B'),
+        order: c.order || 1,
+        content: c.content,
+        maxPoints: c.maxPoints,
+        groupTitle: (c as any).groupTitle || official.positionDef.name,
+      })),
+      scores: item.scores || {},
+      selfTotal: item.selfTotalScore ?? (item as any).self_score ?? 100,
+      bghTotal: item.bghTotalScore ?? (item as any).bgh_score ?? 100,
+      selfRank: item.selfRank || (item as any).self_rating || 'Hoàn thành xuất sắc',
+      bghRank: item.bghRank || (item as any).bgh_rating || 'Hoàn thành xuất sắc',
+    });
+    showToast(`Đã xuất file Word phiếu KPI của ${item.staffName} (${item.position})!`, 'success');
+  };
+
+  // Export single evaluation sheet directly to Microsoft Excel (.xlsx)
+  const exportEvaluationItemToExcel = (item: TeacherKpiEvaluation) => {
+    const pKey = detectStaffPositionKey(item.position);
+    const official = getOfficialStaffCriteria(item.position || pKey);
+    const criteriaToUse =
+      item.criteria_snapshot && item.criteria_snapshot.length > 0
+        ? (item.criteria_snapshot as KpiCriterionItem[])
+        : official.allCriteria;
+
+    exportKpiEvaluationToExcel({
+      schoolName: schoolConfig.fullName || 'TRƯỜNG THPT PHƯƠNG XÁ',
+      departmentName: 'Tổ Văn phòng',
+      teacherName: item.staffName,
+      position: item.position || official.positionDef.name,
+      department: 'Tổ Văn phòng',
+      schoolYear: item.schoolYear || schoolYear,
+      evaluationPeriod: item.evaluationPeriod,
+      periodName: item.periodName || 'Tháng 09/2026',
+      month: item.month || 9,
+      year: item.year || 2026,
+      targetType: 'nhanvien',
+      criteria: criteriaToUse.map((c) => ({
+        id: c.id,
+        section: c.section || (c.id.startsWith('NV-A') ? 'A' : 'B'),
+        sectionTitle: (c as any).sectionTitle || (c as any).groupTitle || official.positionDef.name,
+        order: c.order || 1,
+        content: c.content,
+        maxPoints: c.maxPoints,
+      })),
+      scores: item.scores || {},
+      selfTotal: item.selfTotalScore ?? (item as any).self_score ?? 100,
+      bghTotal: item.bghTotalScore ?? (item as any).bgh_score ?? 100,
+      selfRank: item.selfRank || (item as any).self_rating || 'Hoàn thành xuất sắc',
+      bghRank: item.bghRank || (item as any).bgh_rating || 'Hoàn thành xuất sắc',
+    });
+    showToast(`Đã xuất file Excel phiếu KPI của ${item.staffName} (${item.position})!`, 'success');
+  };
+
+  // Export to Excel for Current Staff in Sheet Mode
   const handleExportExcel = () => {
     if (!activeStaff) return;
     const wb = XLSX.utils.book_new();
@@ -1363,7 +1576,7 @@ export const StaffKpiModuleView: React.FC<StaffKpiModuleViewProps> = ({ evaluati
     });
   }, [officeEvaluations, positionFilter, monthFilter, evaluatorFilter, searchStaffQuery, bghEvaluators]);
 
-  // Export List to Excel (Requirement 2)
+  // Export List to Excel with Master Summary Sheet + Individual Staff Sheets
   const handleExportListExcel = () => {
     if (filteredOfficeEvaluations.length === 0) {
       showToast('Không có dữ liệu phiếu KPI nào để xuất Excel!', 'warning');
@@ -1376,52 +1589,195 @@ export const StaffKpiModuleView: React.FC<StaffKpiModuleViewProps> = ({ evaluati
         ? 'Tất cả các tháng'
         : `Tháng ${String(monthFilter).padStart(2, '0')}/${modalEvalYear || 2026}`;
 
+    // 1. Overview Sheet
     const data: (string | number)[][] = [
       ['SỞ GD&ĐT PHÚ THỌ', '', '', '', 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', '', '', '', ''],
       ['TRƯỜNG THPT PHƯƠNG XÁ', '', '', '', 'Độc lập – Tự do – Hạnh phúc', '', '', '', ''],
       ['', '', '', '', '', '', '', '', ''],
-      ['PHIẾU/ BẢNG TỔNG HỢP ĐÁNH GIÁ KPI NHÂN VIÊN', '', '', '', '', '', '', '', ''],
+      ['BẢNG TỔNG HỢP ĐÁNH GIÁ KPI TOÀN BỘ NHÂN VIÊN', '', '', '', '', '', '', '', ''],
       ['TRƯỜNG THPT PHƯƠNG XÁ', '', '', '', '', '', '', '', ''],
       [`Kỳ đánh giá: ${monthLabel} • Năm học: ${schoolYear}`, '', '', '', '', '', '', '', ''],
       ['', '', '', '', '', '', '', '', ''],
-      ['STT', 'Họ và tên', 'Chức vụ', 'Bộ phận/Tổ', 'Tháng', 'Tổng điểm', 'Xếp loại', 'Người đánh giá', 'Ngày đánh giá'],
+      ['STT', 'Mã NV', 'Họ và tên', 'Vị trí việc làm', 'Tổ / Bộ phận', 'Kỳ đánh giá', 'Điểm tự chấm', 'Điểm BGH', 'Xếp loại BGH', 'Người đánh giá', 'Trạng thái'],
     ];
 
     filteredOfficeEvaluations.forEach((item, idx) => {
-      const totalScore = item.bghTotalScore ?? item.selfTotalScore ?? 100;
-      const rankLabel = item.bghRank || item.selfRank || calculateStaffRank(totalScore, rankingTiers);
+      const selfScore = item.selfTotalScore ?? item.self_score ?? 100;
+      const bghScore = item.bghTotalScore ?? item.bgh_score ?? selfScore;
+      const rankLabel = item.bghRank || item.selfRank || calculateStaffRank(bghScore, rankingTiers);
       const mText = item.month ? `Tháng ${String(item.month).padStart(2, '0')}` : (item.periodName || 'Tháng 09/2026');
-      const evalDate = item.bghDate || item.deptDate || item.selfDate || (item.updatedAt ? item.updatedAt.split('T')[0] : '2026-09-24');
 
       data.push([
         idx + 1,
+        item.staffCode,
         item.staffName,
         item.position,
         'Tổ Văn phòng',
         mText,
-        Math.round(totalScore * 10) / 10,
+        `${Math.round(selfScore * 10) / 10}/100`,
+        `${Math.round(bghScore * 10) / 10}/100`,
         rankLabel,
-        item.evaluatorName || 'Ban Giám hiệu / Tổ trưởng Tổ Văn phòng',
-        evalDate,
+        item.evaluatorName || 'Ban Giám hiệu & Tổ trưởng',
+        item.status === 'completed' || item.status === 'bgh_approved' ? 'Đã duyệt' : 'Đang soạn',
       ]);
     });
 
     const ws = XLSX.utils.aoa_to_sheet(data);
     ws['!cols'] = [
       { wch: 6 },
-      { wch: 25 },
-      { wch: 22 },
-      { wch: 16 },
-      { wch: 16 },
       { wch: 12 },
-      { wch: 22 },
+      { wch: 25 },
+      { wch: 25 },
+      { wch: 16 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 24 },
       { wch: 32 },
       { wch: 14 },
     ];
 
-    XLSX.utils.book_append_sheet(wb, ws, 'Tong_Hop_KPI_NhanVien');
-    XLSX.writeFile(wb, `Bang_Tong_Hop_KPI_Nhan_Vien_THPT_Phuong_Xa_${schoolYear}.xlsx`);
-    showToast(`Đã xuất file Excel ${filteredOfficeEvaluations.length} phiếu KPI nhân viên thành công!`, 'success');
+    XLSX.utils.book_append_sheet(wb, ws, 'TONG_HOP_NV');
+
+    // 2. Individual Sheets for Each Staff Member
+    filteredOfficeEvaluations.forEach((item) => {
+      const pKey = detectStaffPositionKey(item.position);
+      const official = getOfficialStaffCriteria(item.position || pKey);
+      const criteriaToUse =
+        item.criteria_snapshot && item.criteria_snapshot.length > 0
+          ? (item.criteria_snapshot as KpiCriterionItem[])
+          : official.allCriteria;
+
+      const partACriteria = criteriaToUse.filter(
+        (c) => c.section === 'A' || c.id.startsWith('NV-A')
+      );
+      const partBCriteria = criteriaToUse.filter(
+        (c) => c.section === 'B' || !c.section || c.id.startsWith('NV-B')
+      );
+
+      const rows: any[] = [];
+      rows.push({
+        STT: '',
+        'Nội dung đánh giá / nhiệm vụ chi tiết': 'SỞ GD&ĐT PHÚ THỌ - TRƯỜNG THPT PHƯƠNG XÁ',
+        'Điểm tối đa': '',
+        'Cá nhân tự chấm': '',
+        'BGH chấm': '',
+        'Minh chứng / ghi chú': '',
+      });
+      rows.push({
+        STT: '',
+        'Nội dung đánh giá / nhiệm vụ chi tiết': `PHIẾU ĐÁNH GIÁ KPI NHÂN VIÊN - ${item.staffName.toUpperCase()} (${item.position.toUpperCase()})`,
+        'Điểm tối đa': '',
+        'Cá nhân tự chấm': '',
+        'BGH chấm': '',
+        'Minh chứng / ghi chú': '',
+      });
+      rows.push({
+        STT: '',
+        'Nội dung đánh giá / nhiệm vụ chi tiết': `Mã NV: ${item.staffCode} | Tổ: Tổ Văn phòng | Người đánh giá: ${item.evaluatorName || 'Ban Giám hiệu'} | Năm học: ${schoolYear}`,
+        'Điểm tối đa': '',
+        'Cá nhân tự chấm': '',
+        'BGH chấm': '',
+        'Minh chứng / ghi chú': '',
+      });
+      rows.push({});
+
+      // Part A
+      let selfA = 0;
+      let bghA = 0;
+      partACriteria.forEach((c) => {
+        const sc = item.scores?.[c.id];
+        if (!sc?.isNa) {
+          selfA += sc?.selfScore ?? c.maxPoints;
+          bghA += sc?.bghScore ?? sc?.deptScore ?? c.maxPoints;
+        }
+      });
+
+      rows.push({
+        STT: 'A',
+        'Nội dung đánh giá / nhiệm vụ chi tiết': 'A. KPI CHUNG – 30 ĐIỂM (Áp dụng toàn thể nhân viên Tổ Văn phòng)',
+        'Điểm tối đa': 30,
+        'Cá nhân tự chấm': Math.round(selfA * 10) / 10,
+        'BGH chấm': Math.round(bghA * 10) / 10,
+        'Minh chứng / ghi chú': 'Tối đa 30 điểm',
+      });
+
+      partACriteria.forEach((c) => {
+        const sc = item.scores?.[c.id];
+        rows.push({
+          STT: c.order,
+          'Nội dung đánh giá / nhiệm vụ chi tiết': c.content,
+          'Điểm tối đa': c.maxPoints,
+          'Cá nhân tự chấm': sc?.isNa ? 'N/A' : (sc?.selfScore ?? c.maxPoints),
+          'BGH chấm': sc?.isNa ? 'N/A' : (sc?.bghScore ?? sc?.deptScore ?? c.maxPoints),
+          'Minh chứng / ghi chú': sc?.evidence || '',
+        });
+      });
+
+      // Part B
+      let selfB = 0;
+      let bghB = 0;
+      partBCriteria.forEach((c) => {
+        const sc = item.scores?.[c.id];
+        if (!sc?.isNa) {
+          selfB += sc?.selfScore ?? c.maxPoints;
+          bghB += sc?.bghScore ?? sc?.deptScore ?? c.maxPoints;
+        }
+      });
+
+      rows.push({
+        STT: 'B',
+        'Nội dung đánh giá / nhiệm vụ chi tiết': `B. KPI VỊ TRÍ VIỆC LÀM: ${item.position.toUpperCase()} – 70 ĐIỂM`,
+        'Điểm tối đa': 70,
+        'Cá nhân tự chấm': Math.round(selfB * 10) / 10,
+        'BGH chấm': Math.round(bghB * 10) / 10,
+        'Minh chứng / ghi chú': official.positionDef.description,
+      });
+
+      partBCriteria.forEach((c) => {
+        const sc = item.scores?.[c.id];
+        rows.push({
+          STT: c.order,
+          'Nội dung đánh giá / nhiệm vụ chi tiết': c.content,
+          'Điểm tối đa': c.maxPoints,
+          'Cá nhân tự chấm': sc?.isNa ? 'N/A' : (sc?.selfScore ?? c.maxPoints),
+          'BGH chấm': sc?.isNa ? 'N/A' : (sc?.bghScore ?? sc?.deptScore ?? c.maxPoints),
+          'Minh chứng / ghi chú': sc?.evidence || '',
+        });
+      });
+
+      // Total
+      const selfTotal = item.selfTotalScore ?? Math.round((selfA + selfB) * 10) / 10;
+      const bghTotal = item.bghTotalScore ?? item.bgh_score ?? Math.round((bghA + bghB) * 10) / 10;
+      const rank = item.bghRank || calculateStaffRank(bghTotal, rankingTiers);
+
+      rows.push({});
+      rows.push({
+        STT: 'TỔNG',
+        'Nội dung đánh giá / nhiệm vụ chi tiết': 'TỔNG ĐIỂM KPI (THANG ĐIỂM 100)',
+        'Điểm tối đa': 100,
+        'Cá nhân tự chấm': selfTotal,
+        'BGH chấm': bghTotal,
+        'Minh chứng / ghi chú': `Xếp loại: ${rank}`,
+      });
+
+      const staffWs = XLSX.utils.json_to_sheet(rows);
+      staffWs['!cols'] = [
+        { wch: 8 },
+        { wch: 65 },
+        { wch: 12 },
+        { wch: 16 },
+        { wch: 16 },
+        { wch: 38 },
+      ];
+
+      const cleanName = item.staffName.split(' ').slice(-2).join('_');
+      const sheetName = `${cleanName}_${item.staffCode}`.substring(0, 30);
+      XLSX.utils.book_append_sheet(wb, staffWs, sheetName);
+    });
+
+    XLSX.writeFile(wb, `So_Bo_KPI_Tat_Ca_Nhan_Vien_THPT_Phuong_Xa_${schoolYear}.xlsx`);
+    showToast(`Đã xuất thành công sổ bộ Excel gồm ${filteredOfficeEvaluations.length} phiếu KPI nhân viên!`, 'success');
   };
 
   // Save & Print in Sheet view (Requirement 6)
@@ -1436,63 +1792,57 @@ export const StaffKpiModuleView: React.FC<StaffKpiModuleViewProps> = ({ evaluati
   };
 
   return (
-    <div className="space-y-6">
-      {/* 1. TOP HERO HEADER */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-purple-950 rounded-3xl p-6 sm:p-7 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 text-purple-200 border border-purple-400/30 text-xs font-semibold">
-              <Briefcase className="w-3.5 h-3.5 text-purple-300" />
-              <span>SỞ GD&ĐT PHÚ THỌ • TRƯỜNG THPT PHƯƠNG XÁ</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-3">
-              Module KPI Nhân Viên – Tổ Văn Phòng
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-3xl leading-relaxed">
-              Căn cứ trực tiếp theo file: <strong>“KPI_Nhan_vien_THPT_Phương xá.pdf”</strong>. Cấu trúc điểm chuẩn:{' '}
-              <strong className="text-amber-300">30 điểm KPI chung</strong> (7 tiêu chí) +{' '}
-              <strong className="text-emerald-300">70 điểm KPI theo đúng Vị trí việc làm</strong> (7 tiêu chí đặc thù). Tổng tối đa 100 điểm.
-            </p>
+    <div className="space-y-3.5 w-full">
+      {/* 1. TOP HEADER: Single compact line */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-purple-700 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
+            <Briefcase className="w-4 h-4" />
           </div>
-
-          <div className="flex items-center gap-3 shrink-0">
-            {activeViewMode === 'sheet' && (
-              <button
-                onClick={handleCancelSheet}
-                className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center gap-2 transition cursor-pointer border border-white/20"
-              >
-                <ArrowLeft className="w-4 h-4 text-purple-300" />
-                <span>Danh sách phiếu ({officeEvaluations.length})</span>
-              </button>
-            )}
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <h1 className="text-base sm:text-lg font-black tracking-tight text-slate-900 whitespace-nowrap">
+              Danh sách phiếu đánh giá KPI nhân viên – Tổ Văn phòng
+            </h1>
+            <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
+              (Năm học {schoolYear} • THPT Phương Xá)
+            </span>
           </div>
         </div>
+
+        {activeViewMode === 'sheet' && (
+          <button
+            onClick={handleCancelSheet}
+            className="h-9 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer border border-slate-200 shrink-0 whitespace-nowrap"
+          >
+            <ArrowLeft className="w-4 h-4 text-purple-600 shrink-0" />
+            <span>Danh sách phiếu ({officeEvaluations.length})</span>
+          </button>
+        )}
       </div>
 
-      {/* 2. TOP FUNCTIONAL CONTROL TOOLBAR (Requirement 8: Horizontal top toolbar in exact order) */}
-      <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
-        {/* Left Function Buttons (Order: [Cấu hình xếp loại] [Xuất Excel] [In danh sách] [Tiêu chí KPI] [Xóa toàn bộ]) */}
+      {/* 2. TOP FUNCTIONAL CONTROL TOOLBAR */}
+      <div className="bg-white rounded-2xl p-2.5 sm:p-3 border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-2.5">
+        {/* Left Function Buttons */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
           {/* Button 1: Cấu hình xếp loại */}
           <button
             type="button"
             onClick={() => setIsRankingConfigOpen(true)}
-            className="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs border border-slate-300 shadow-2xs flex items-center gap-2 transition cursor-pointer"
+            className="h-10 px-3.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-800 font-bold text-xs border border-slate-300 shadow-2xs inline-flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
             title="Cấu hình thang điểm và mức xếp loại KPI nhân viên"
           >
-            <Settings className="w-4 h-4 text-purple-700" />
-            <span>Cấu hình xếp loại</span>
+            <Settings className="w-4 h-4 text-purple-700 shrink-0" />
+            <span>⚙ Cấu hình xếp loại</span>
           </button>
 
           {/* Button 2: Xuất Excel */}
           <button
             type="button"
             onClick={handleExportListExcel}
-            className="px-3.5 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-300 shadow-2xs flex items-center gap-2 transition cursor-pointer"
+            className="h-10 px-3.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-300 shadow-2xs inline-flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
             title="Xuất danh sách KPI nhân viên sau lọc ra file Excel"
           >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>📊 Xuất Excel</span>
           </button>
 
@@ -1500,16 +1850,23 @@ export const StaffKpiModuleView: React.FC<StaffKpiModuleViewProps> = ({ evaluati
           <button
             type="button"
             onClick={() => setIsPrintListOpen(true)}
-            className="px-3.5 py-2.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold text-xs border border-sky-300 shadow-2xs flex items-center gap-2 transition cursor-pointer"
+            className="h-10 px-3.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold text-xs border border-sky-300 shadow-2xs inline-flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
             title="In danh sách KPI nhân viên khổ A4 theo chuẩn hành chính"
           >
-            <Printer className="w-4 h-4 text-sky-600" />
-            <span>🖨️ In danh sách</span>
+            <Printer className="w-4 h-4 text-sky-600 shrink-0" />
+            <span>🖨 In danh sách</span>
           </button>
 
-
-
-
+          {/* Button 4: Xuất phiếu KPI nhân viên */}
+          <button
+            type="button"
+            onClick={() => setIsExportFormsModalOpen(true)}
+            className="h-10 px-3.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold text-xs border border-purple-300 shadow-2xs inline-flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
+            title="Xuất phiếu đánh giá KPI chi tiết cho tất cả nhân viên"
+          >
+            <FileText className="w-4 h-4 text-purple-700 shrink-0" />
+            <span>📑 Xuất phiếu KPI nhân viên</span>
+          </button>
 
           {/* Button 5: Xóa toàn bộ */}
           <button
@@ -1521,24 +1878,24 @@ export const StaffKpiModuleView: React.FC<StaffKpiModuleViewProps> = ({ evaluati
               }
               setIsClearModalOpen(true);
             }}
-            className="px-3.5 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs border border-rose-300 shadow-2xs flex items-center gap-2 transition cursor-pointer"
+            className="h-10 px-3.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold text-xs border border-rose-300 shadow-2xs inline-flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
             title="Xóa kết quả KPI nhân viên theo phạm vi đã xác nhận"
           >
-            <Trash2 className="w-4 h-4 text-rose-600" />
-            <span>🗑️ Xóa toàn bộ</span>
+            <Trash2 className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>🗑 Xóa toàn bộ</span>
           </button>
         </div>
 
-        {/* Right Action Button (Order 6: [➕ TẠO PHIẾU KPI] - Placed on the right and most prominent) */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Right Action Button: [ ➕ TẠO PHIẾU KPI ] */}
+        <div className="flex items-center gap-2 shrink-0 ml-auto sm:ml-0">
           <button
             type="button"
             onClick={() => setIsCreateModalOpen(true)}
             id="btn-create-office-kpi"
-            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-slate-950 font-black text-sm shadow-md shadow-amber-400/25 transition transform hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2 cursor-pointer border border-amber-300 shrink-0"
+            className="h-10 px-5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-slate-950 font-black text-xs sm:text-sm shadow-md shadow-amber-400/25 transition transform hover:scale-[1.02] active:scale-[0.98] inline-flex items-center justify-center gap-2 cursor-pointer border border-amber-300 whitespace-nowrap shrink-0"
           >
-            <PlusCircle className="w-5 h-5 text-slate-950" />
-            <span>➕ TẠO PHIẾU KPI</span>
+            <PlusCircle className="w-4 h-4 text-slate-950 shrink-0" />
+            <span>＋ TẠO PHIẾU KPI</span>
           </button>
         </div>
       </div>
@@ -1849,9 +2206,7 @@ export const StaffKpiModuleView: React.FC<StaffKpiModuleViewProps> = ({ evaluati
                                         type="button"
                                         onClick={() => {
                                           setActiveActionDropdownId(null);
-                                          setCurrentEvalRecord(item);
-                                          setActiveViewMode('sheet');
-                                          setTimeout(() => handleExportWord(), 300);
+                                          exportEvaluationItemToWord(item);
                                         }}
                                         className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-900 flex items-center gap-2.5 cursor-pointer"
                                       >
@@ -1862,9 +2217,7 @@ export const StaffKpiModuleView: React.FC<StaffKpiModuleViewProps> = ({ evaluati
                                         type="button"
                                         onClick={() => {
                                           setActiveActionDropdownId(null);
-                                          setCurrentEvalRecord(item);
-                                          setActiveViewMode('sheet');
-                                          setTimeout(() => handleExportExcel(), 300);
+                                          exportEvaluationItemToExcel(item);
                                         }}
                                         className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-900 flex items-center gap-2.5 cursor-pointer"
                                       >
@@ -1877,7 +2230,7 @@ export const StaffKpiModuleView: React.FC<StaffKpiModuleViewProps> = ({ evaluati
                                           setActiveActionDropdownId(null);
                                           setCurrentEvalRecord(item);
                                           setActiveViewMode('sheet');
-                                          setTimeout(() => handlePrint(), 300);
+                                          setTimeout(() => handlePrint(), 150);
                                         }}
                                         className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-900 flex items-center gap-2.5 cursor-pointer"
                                       >
@@ -2661,14 +3014,14 @@ export const StaffKpiModuleView: React.FC<StaffKpiModuleViewProps> = ({ evaluati
               </button>
               <button
                 type="button"
-                onClick={() => handleSaveEvaluation('waiting_bgh')}
+                onClick={() => handleSaveEvaluation('bgh_approved')}
                 className="px-4 py-2.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-black text-xs shadow-md transition cursor-pointer"
               >
                 💾 LƯU KẾT QUẢ BGH
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   const missing: string[] = [];
                   sheetGeneralCriteria.concat(sheetPositionCriteria).forEach((c) => {
                     const sc = scores[c.id];
@@ -2680,8 +3033,7 @@ export const StaffKpiModuleView: React.FC<StaffKpiModuleViewProps> = ({ evaluati
                     showToast(`❌ Chưa thể hoàn tất. Còn thiếu BGH chấm các tiêu chí: ${missing.join(', ')}`, 'error');
                     return;
                   }
-                  handleSaveEvaluation('bgh_approved');
-                  showToast('✓ Đã hoàn tất đánh giá KPI nhân viên thành công!', 'success');
+                  await handleSaveEvaluation('completed');
                 }}
                 className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-md transition cursor-pointer"
               >
@@ -2689,11 +3041,29 @@ export const StaffKpiModuleView: React.FC<StaffKpiModuleViewProps> = ({ evaluati
               </button>
               <button
                 type="button"
+                onClick={() => handleExportWord()}
+                className="px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition cursor-pointer inline-flex items-center gap-1.5"
+                title="Xuất file Word (.docx) chuẩn hành chính"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Xuất Word</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExportExcel()}
+                className="px-3.5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-xs transition cursor-pointer inline-flex items-center gap-1.5"
+                title="Xuất file Excel (.xlsx) chuẩn biểu mẫu"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Xuất Excel</span>
+              </button>
+              <button
+                type="button"
                 onClick={handlePrint}
-                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-black text-xs shadow-md transition cursor-pointer inline-flex items-center gap-1.5"
+                className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-black text-xs shadow-md transition cursor-pointer inline-flex items-center gap-1.5"
               >
                 <Printer className="w-3.5 h-3.5" />
-                <span>In phiếu / Word</span>
+                <span>In phiếu A4</span>
               </button>
             </div>
 
@@ -3318,7 +3688,17 @@ export const StaffKpiModuleView: React.FC<StaffKpiModuleViewProps> = ({ evaluati
         rankingTiers={rankingTiers}
       />
 
-
+      {/* 9. XUẤT PHIẾU KPI NHÂN VIÊN (TẤT CẢ VỊ TRÍ) */}
+      <StaffExportKpiFormsModal
+        isOpen={isExportFormsModalOpen}
+        onClose={() => setIsExportFormsModalOpen(false)}
+        staffList={staffList}
+        evaluationsList={evaluationsList}
+        schoolYear={schoolYear}
+        rankingTiers={rankingTiers}
+        schoolName={schoolConfig?.fullName || 'TRƯỜNG THPT PHƯƠNG XÁ'}
+        showToast={showToast}
+      />
     </div>
   );
 };

@@ -1258,15 +1258,15 @@ export const KPI_OFFICE_PRINCIPLES: string[] = [
  * Nhận diện key vị trí việc làm dựa trên chức vụ hoặc tên
  */
 export function detectStaffPositionKey(positionStr: string): string {
-  const norm = (positionStr || '').toLowerCase();
-  if (norm.includes('kế toán') || norm === 'ketoan') return 'ketoan';
-  if (norm.includes('thủ quỹ') || norm === 'thuquy') return 'thuquy';
-  if (norm.includes('văn thư') || norm.includes('lưu trữ') || norm === 'vanthu') return 'vanthu';
-  if (norm.includes('y tế') || norm.includes('bác sĩ') || norm === 'yte') return 'yte';
-  if (norm.includes('bảo vệ') || norm === 'baove') return 'baove';
-  if (norm.includes('phục vụ') || norm.includes('vệ sinh') || norm.includes('lao công') || norm === 'phucvu') return 'phucvu';
-  if (norm.includes('thư viện') || norm === 'thuvien') return 'thuvien';
-  if (norm.includes('thiết bị') || norm.includes('thí nghiệm') || norm === 'thietbi') return 'thietbi';
+  const norm = (positionStr || '').toLowerCase().trim();
+  if (norm === 'ketoan' || norm.includes('kế toán') || norm.includes('ke toan')) return 'ketoan';
+  if (norm === 'thuquy' || norm.includes('thủ quỹ') || norm.includes('thu quy')) return 'thuquy';
+  if (norm === 'vanthu' || norm.includes('văn thư') || norm.includes('van thu') || norm.includes('lưu trữ')) return 'vanthu';
+  if (norm === 'yte' || norm.includes('y tế') || norm.includes('y te') || norm.includes('bác sĩ')) return 'yte';
+  if (norm === 'baove' || norm.includes('bảo vệ') || norm.includes('bao ve')) return 'baove';
+  if (norm === 'phucvu' || norm.includes('phục vụ') || norm.includes('phuc vu') || norm.includes('vệ sinh') || norm.includes('lao công')) return 'phucvu';
+  if (norm === 'thuvien' || norm.includes('thư viện') || norm.includes('thu vien')) return 'thuvien';
+  if (norm === 'thietbi' || norm.includes('thiết bị') || norm.includes('thiet bi') || norm.includes('thí nghiệm')) return 'thietbi';
   // Mặc định kế toán nếu không nhận diện được
   return 'ketoan';
 }

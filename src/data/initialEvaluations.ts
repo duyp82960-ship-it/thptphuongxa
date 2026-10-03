@@ -188,29 +188,46 @@ export function createDefaultStaffEvaluation(
 
   return {
     id: `eval-${staffId}-${schoolYear.replace(/\s+/g, '')}`,
+    evaluation_id: `eval-${staffId}-${schoolYear.replace(/\s+/g, '')}`,
     staffId,
+    employee_id: staffId,
     staffCode,
     staffName,
+    full_name: staffName,
     department,
+    department_id: 'to-van-phong',
     position,
+    job_position_name: position,
     targetType: 'nhanvien',
     schoolYear,
     semester: 1,
     month: 9,
     year: 2026,
-    evaluationPeriod: 'ki1',
-    periodName: 'Kì I',
+    evaluationPeriod: 'thang',
+    periodName: 'Tháng 09/2026',
     scores,
     selfTotalScore: 100,
     deptTotalScore: 100,
     bghTotalScore: 100,
-    selfRank: 'Hoàn thành xuất sắc',
-    deptRank: 'Hoàn thành xuất sắc',
-    bghRank: 'Hoàn thành xuất sắc',
+    personal_score: 100,
+    bgh_score: 100,
+    bgh_total_score: 100,
+    selfRank: 'Hoàn thành xuất sắc nhiệm vụ',
+    deptRank: 'Hoàn thành xuất sắc nhiệm vụ',
+    bghRank: 'Hoàn thành xuất sắc nhiệm vụ',
+    evaluatorId: 'bgh-01',
+    evaluatorName: 'Thầy Lê Quốc Tuấn – Hiệu trưởng',
+    bghEvaluatorId: 'bgh-01',
+    bghEvaluatorName: 'Thầy Lê Quốc Tuấn',
+    bghEvaluatorRole: 'Hiệu trưởng',
+    bgh_evaluator_id: 'bgh-01',
+    bgh_evaluator_name: 'Thầy Lê Quốc Tuấn',
+    bgh_comment: 'Đồng chí hoàn thành xuất sắc các nhiệm vụ được giao.',
     status: 'bgh_approved',
     selfDate: '2026-09-20',
     deptDate: '2026-09-22',
     bghDate: '2026-09-23',
+    bgh_evaluated_at: '2026-09-23T10:00:00.000Z',
     updatedAt: new Date().toISOString(),
   };
 }
@@ -308,7 +325,7 @@ export const INITIAL_EVALUATIONS: TeacherKpiEvaluation[] = [
     '2026 - 2027'
   ),
 
-  // Nhân viên Văn phòng (Đầy đủ 4 nhân viên Tổ Văn phòng)
+  // Nhân viên Văn phòng (Đầy đủ 12 nhân viên và 8 vị trí việc làm chuẩn hóa)
   createDefaultStaffEvaluation(
     'nv-01',
     'NV001',
@@ -320,25 +337,89 @@ export const INITIAL_EVALUATIONS: TeacherKpiEvaluation[] = [
   createDefaultStaffEvaluation(
     'nv-02',
     'NV002',
-    'Phạm Thu Hương',
+    'Nguyễn Văn Tuấn',
     'Tổ Văn phòng',
-    'Văn thư - Thủ quỹ',
+    'Nhân viên Kế toán',
     '2026 - 2027'
   ),
   createDefaultStaffEvaluation(
     'nv-03',
     'NV003',
-    'Nguyễn Hải Đăng',
+    'Hoàng Thị Mai',
     'Tổ Văn phòng',
-    'Cán bộ Y tế học đường',
+    'Thủ quỹ',
     '2026 - 2027'
   ),
   createDefaultStaffEvaluation(
     'nv-04',
     'NV004',
+    'Phạm Thu Hương',
+    'Tổ Văn phòng',
+    'Nhân viên Văn thư - Lưu trữ',
+    '2026 - 2027'
+  ),
+  createDefaultStaffEvaluation(
+    'nv-05',
+    'NV005',
+    'Vũ Thị Hồng',
+    'Tổ Văn phòng',
+    'Nhân viên Văn thư',
+    '2026 - 2027'
+  ),
+  createDefaultStaffEvaluation(
+    'nv-06',
+    'NV006',
+    'Nguyễn Hải Đăng',
+    'Tổ Văn phòng',
+    'Nhân viên Y tế học đường',
+    '2026 - 2027'
+  ),
+  createDefaultStaffEvaluation(
+    'nv-07',
+    'NV007',
+    'Đỗ Văn Hùng',
+    'Tổ Văn phòng',
+    'Nhân viên Bảo vệ trường',
+    '2026 - 2027'
+  ),
+  createDefaultStaffEvaluation(
+    'nv-08',
+    'NV008',
+    'Trần Văn Cường',
+    'Tổ Văn phòng',
+    'Nhân viên Bảo vệ',
+    '2026 - 2027'
+  ),
+  createDefaultStaffEvaluation(
+    'nv-09',
+    'NV009',
+    'Nguyễn Thị Thơm',
+    'Tổ Văn phòng',
+    'Nhân viên Phục vụ/Vệ sinh',
+    '2026 - 2027'
+  ),
+  createDefaultStaffEvaluation(
+    'nv-10',
+    'NV010',
     'Lê Thị Tuyết',
     'Tổ Văn phòng',
-    'Quản lý Thư viện trường',
+    'Nhân viên Thư viện',
+    '2026 - 2027'
+  ),
+  createDefaultStaffEvaluation(
+    'nv-11',
+    'NV011',
+    'Ngô Văn Minh',
+    'Tổ Văn phòng',
+    'Nhân viên Thiết bị',
+    '2026 - 2027'
+  ),
+  createDefaultStaffEvaluation(
+    'nv-12',
+    'NV012',
+    'Đặng Hồng Phong',
+    'Tổ Văn phòng',
+    'Nhân viên Thiết bị',
     '2026 - 2027'
   ),
 ];

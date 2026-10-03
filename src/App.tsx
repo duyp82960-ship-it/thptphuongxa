@@ -102,8 +102,8 @@ const MainContent: React.FC = () => {
         />
 
         {/* Content Container */}
-        <div className="flex-1 flex flex-col overflow-y-auto">
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+        <div className="flex-1 flex flex-col overflow-y-auto min-w-0">
+          <main className="flex-1 p-3 sm:p-5 lg:p-6 max-w-[1700px] w-full mx-auto min-w-0">
             {renderActiveView()}
           </main>
 

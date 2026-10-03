@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useKpi } from '../context/KpiContext';
-import { KpiCriterionItem } from '../data/kpiEvaluationTemplates';
+import { KpiCriterionItem, OFFICIAL_STAFF_POSITIONS, getOfficialStaffCriteria } from '../data/kpiEvaluationTemplates';
 import {
   X,
   PlusCircle,
@@ -76,6 +76,7 @@ export const CriteriaEditorModal: React.FC<CriteriaEditorModalProps> = ({
   // Export modal state
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const [exportTargetType, setExportTargetType] = useState<'bgh' | 'giaovien' | 'nhanvien'>('giaovien');
+  const [exportStaffPosition, setExportStaffPosition] = useState<string>('ketoan');
   const [exportScope, setExportScope] = useState<'all' | 'section' | 'display'>('all');
   const [exportSelectedSection, setExportSelectedSection] = useState<string>('all');
   const [exportFormat, setExportFormat] = useState<'word' | 'excel'>('excel');
@@ -221,7 +222,12 @@ export const CriteriaEditorModal: React.FC<CriteriaEditorModalProps> = ({
 
   // Target criteria list for export calculation
   const exportCriteriaListToExport = useMemo(() => {
-    const base = exportTargetType === targetType ? workingList : getCriteriaListForTarget(exportTargetType);
+    let base: KpiCriterionItem[] = [];
+    if (exportTargetType === 'nhanvien') {
+      base = getOfficialStaffCriteria(exportStaffPosition).allCriteria;
+    } else {
+      base = exportTargetType === targetType ? workingList : getCriteriaListForTarget(exportTargetType);
+    }
     if (exportScope === 'all') {
       return base;
     }
@@ -230,15 +236,20 @@ export const CriteriaEditorModal: React.FC<CriteriaEditorModalProps> = ({
       return base.filter((c) => c.section === exportSelectedSection);
     }
     if (exportScope === 'display') {
-      if (exportTargetType === targetType) return displayCriteria;
+      if (exportTargetType === targetType && exportTargetType !== 'nhanvien') return displayCriteria;
       return base.filter((c) => c.status !== 'inactive');
     }
     return base;
-  }, [exportTargetType, targetType, workingList, getCriteriaListForTarget, exportScope, exportSelectedSection, displayCriteria]);
+  }, [exportTargetType, exportStaffPosition, targetType, workingList, getCriteriaListForTarget, exportScope, exportSelectedSection, displayCriteria]);
 
   // Entire target set total points
   const entireTargetSetTotalPoints = useMemo(() => {
-    const base = exportTargetType === targetType ? workingList : getCriteriaListForTarget(exportTargetType);
+    let base: KpiCriterionItem[] = [];
+    if (exportTargetType === 'nhanvien') {
+      base = getOfficialStaffCriteria(exportStaffPosition).allCriteria;
+    } else {
+      base = exportTargetType === targetType ? workingList : getCriteriaListForTarget(exportTargetType);
+    }
     const sum = base.reduce((acc, item) => {
       if (item.status !== 'inactive') {
         return acc + (Number(item.maxPoints) || 0);
@@ -246,7 +257,7 @@ export const CriteriaEditorModal: React.FC<CriteriaEditorModalProps> = ({
       return acc;
     }, 0);
     return Math.round(sum * 10) / 10;
-  }, [exportTargetType, targetType, workingList, getCriteriaListForTarget]);
+  }, [exportTargetType, exportStaffPosition, targetType, workingList, getCriteriaListForTarget]);
 
   // Open Export Modal
   const handleOpenExportModal = () => {
@@ -268,12 +279,15 @@ export const CriteriaEditorModal: React.FC<CriteriaEditorModalProps> = ({
       return;
     }
 
+    const posObj = OFFICIAL_STAFF_POSITIONS.find((p) => p.key === exportStaffPosition);
+    const posName = posObj ? posObj.name : 'Kế toán';
+
     const targetTitle =
       exportTargetType === 'giaovien'
         ? 'KPI Giáo viên'
         : exportTargetType === 'bgh'
         ? 'KPI Cán bộ Quản lý'
-        : 'KPI Nhân viên';
+        : `KPI Nhân viên (${posName})`;
 
     let scopeTitle = 'Toàn bộ tiêu chí';
     if (exportScope === 'section') {
@@ -1134,6 +1148,26 @@ export const CriteriaEditorModal: React.FC<CriteriaEditorModalProps> = ({
                     <span className="font-extrabold text-[11px]">KPI Nhân viên</span>
                   </button>
                 </div>
+
+                {exportTargetType === 'nhanvien' && (
+                  <div className="space-y-1.5 bg-purple-50 p-3 rounded-2xl border border-purple-200 mt-2.5">
+                    <label className="block font-bold text-purple-950 text-xs flex items-center gap-1.5">
+                      <Briefcase className="w-3.5 h-3.5 text-purple-600" />
+                      Chọn vị trí việc làm nhân viên (Kế toán, Văn thư, Thư viện, Thiết bị...):
+                    </label>
+                    <select
+                      value={exportStaffPosition}
+                      onChange={(e) => setExportStaffPosition(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border border-purple-300 font-bold bg-white text-slate-900 text-xs focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                    >
+                      {OFFICIAL_STAFF_POSITIONS.map((pos) => (
+                        <option key={pos.key} value={pos.key}>
+                          {pos.name} ({pos.points}đ vị trí + 30đ chung = 100đ)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
               {/* 2. Phạm vi xuất */}

@@ -24,6 +24,7 @@ import {
   TEACHER_KPI_CRITERIA,
   STAFF_KPI_CRITERIA,
   BGH_KPI_CRITERIA,
+  getOfficialStaffCriteria,
 } from '../data/kpiEvaluationTemplates';
 import {
   getKpiRankingResult,
@@ -139,7 +140,7 @@ export const ThreeTierKpiEvaluationModal: React.FC<ThreeTierKpiEvaluationModalPr
       list = [];
     }
     if (list && list.length > 0) return list;
-    if (targetType === 'nhanvien' || isTargetOfficeStaff) return STAFF_KPI_CRITERIA;
+    if (targetType === 'nhanvien' || isTargetOfficeStaff) return getOfficialStaffCriteria(targetStaff?.position || '').allCriteria;
     if (targetType === 'bgh' || isTargetBgh) return BGH_KPI_CRITERIA;
     return TEACHER_KPI_CRITERIA;
   }, [getCriteriaListForTarget, targetType, targetStaff?.position, isTargetOfficeStaff, isTargetBgh]);

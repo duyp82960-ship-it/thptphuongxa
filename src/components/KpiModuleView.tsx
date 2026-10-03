@@ -66,7 +66,7 @@ import {
   KpiRankingResult,
   getStoredRankingTiers,
 } from '../utils/rankingUtils';
-import { TEACHER_KPI_CRITERIA, STAFF_KPI_CRITERIA } from '../data/kpiEvaluationTemplates';
+import { TEACHER_KPI_CRITERIA, STAFF_KPI_CRITERIA, getOfficialStaffCriteria } from '../data/kpiEvaluationTemplates';
 import * as XLSX from 'xlsx';
 
 interface KpiModuleViewProps {
@@ -618,7 +618,9 @@ export const KpiModuleView: React.FC<KpiModuleViewProps> = ({ targetType }) => {
   // Export single evaluation sheet to Microsoft Word (.doc) (Requirement 13)
   const handleExportSingleWord = (evalItem: TeacherKpiEvaluation) => {
     const criteriaList =
-      evalItem.targetType === 'nhanvien' ? STAFF_KPI_CRITERIA : TEACHER_KPI_CRITERIA;
+      evalItem.targetType === 'nhanvien'
+        ? getOfficialStaffCriteria(evalItem.position || '').allCriteria
+        : TEACHER_KPI_CRITERIA;
     const rankRes = getKpiRankingResult(evalItem);
 
     exportKpiEvaluationToWord({
@@ -839,93 +841,134 @@ export const KpiModuleView: React.FC<KpiModuleViewProps> = ({ targetType }) => {
   }
 
   return (
-    <div className="space-y-5">
-      {/* 1. TOP HERO HEADER */}
-      <div
-        className={`bg-gradient-to-r ${moduleInfo.bgGradient} rounded-3xl p-5 sm:p-6 text-white shadow-xl relative overflow-hidden`}
-      >
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-amber-300 border border-white/20 text-xs font-extrabold">
-              <Icon className="w-4 h-4 text-amber-300" />
-              <span>{moduleInfo.title}</span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-              {targetType === 'bgh' && bghSubTab === 'staff_list'
-                ? 'Danh Sách Cán Bộ Quản Lý'
-                : 'Danh Sách Phiếu Đánh Giá KPI'}
+    <div className="space-y-3.5 w-full">
+      {/* 1. TOP HEADER: Single compact line */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-blue-700 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
+            <Icon className="w-4 h-4" />
+          </div>
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <h1 className="text-base sm:text-lg font-black tracking-tight text-slate-900 whitespace-nowrap">
+              {targetType === 'bgh'
+                ? (bghSubTab === 'staff_list' ? 'Danh sách Cán bộ Quản lý' : 'Danh sách phiếu đánh giá KPI Cán bộ Quản lý')
+                : targetType === 'nhanvien'
+                ? 'Danh sách phiếu đánh giá KPI nhân viên văn phòng'
+                : 'Danh sách phiếu đánh giá KPI giáo viên'}
             </h1>
-            <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-              {targetType === 'bgh' && bghSubTab === 'staff_list'
-                ? `Danh sách ${cbqlStaffList.length} Cán bộ Quản lý: Ban Giám hiệu (${bghTierCounts.bgh}), Tổ trưởng chuyên môn (${bghTierCounts.totruong}) và Tổ phó chuyên môn (${bghTierCounts.topho}) trường THPT Phương Xá.`
-                : `${moduleInfo.subtitle}. Kết quả xếp loại chính thức được xác định tự động từ Tổng điểm BGH duyệt theo 4 mức: HTSXNV, HTTNV, HTNV, KHTNV.`}
-            </p>
+            <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
+              (Năm học {schoolYear} • THPT Phương Xá)
+            </span>
           </div>
+        </div>
 
-          {/* Action Buttons: "+ TẠO PHIẾU KPI", Cấu hình xếp loại, Excel, Print */}
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {/* Nút Cấu hình Danh mục Xếp loại (Requirement 5) */}
+        {/* Sub-nav toggle if CBQL */}
+        {targetType === 'bgh' && (
+          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs shrink-0">
             <button
-              onClick={() => setIsRankingConfigModalOpen(true)}
-              className="px-3 py-2 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 text-amber-200 border border-amber-300/40 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-              title="Cấu hình ngưỡng điểm danh mục xếp loại KPI"
+              onClick={() => setBghSubTab('staff_list')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                bghSubTab === 'staff_list'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
             >
-              <Award className="w-4 h-4 text-amber-300" />
-              <span>Cấu hình xếp loại</span>
+              <Users className="w-3.5 h-3.5 shrink-0" />
+              <span>Cán bộ Quản lý ({bghTierCounts.total})</span>
             </button>
-
             <button
-              onClick={targetType === 'bgh' && bghSubTab === 'staff_list' ? handleExportCbqlExcel : handleExportExcel}
-              className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-              title={targetType === 'bgh' && bghSubTab === 'staff_list' ? 'Xuất Excel danh sách CBQL' : 'Xuất file Excel danh sách phiếu KPI'}
+              onClick={() => setBghSubTab('evaluations')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                bghSubTab === 'evaluations'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
             >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-300" />
-              <span className="hidden sm:inline">Xuất Excel</span>
-            </button>
-
-            <button
-              onClick={targetType === 'bgh' && bghSubTab === 'staff_list' ? handlePrintCbqlList : handlePrintList}
-              className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-              title={targetType === 'bgh' && bghSubTab === 'staff_list' ? 'In danh sách CBQL' : 'In danh sách phiếu KPI'}
-            >
-              <Printer className="w-4 h-4 text-blue-300" />
-              <span className="hidden sm:inline">In danh sách</span>
-            </button>
-
-            <button
-              onClick={() => openCriteriaEditor(targetType)}
-              id={`btn-edit-criteria-${targetType}`}
-              className="px-3 py-2 rounded-xl bg-indigo-500/30 hover:bg-indigo-500/50 text-indigo-100 border border-indigo-300/40 text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-              title="Xem và chỉnh sửa tiêu chí cho bộ KPI này"
-            >
-              <Edit className="w-4 h-4 text-amber-300" />
-              <span className="hidden sm:inline">Tiêu chí KPI</span>
-            </button>
-
-            {isBgh && (
-              <button
-                onClick={() => setIsClearAllModalOpen(true)}
-                id="btn-clear-all-evaluations"
-                className="px-3 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-400/30 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                title="Xóa toàn bộ phiếu đánh giá KPI"
-              >
-                <Trash2 className="w-4 h-4 text-rose-300" />
-                <span className="hidden md:inline">Xóa toàn bộ</span>
-              </button>
-            )}
-
-            <button
-              onClick={() => {
-                setPreselectedStaffId(undefined);
-                setIsCreateModalOpen(true);
-              }}
-              id={`btn-create-kpi-${targetType}`}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-300 hover:from-amber-300 hover:to-amber-200 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-amber-400/20 transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <PlusCircle className="w-4 h-4 text-slate-950" />
-              <span>+ TẠO PHIẾU KPI</span>
+              <FileCheck2 className="w-3.5 h-3.5 shrink-0" />
+              <span>Phiếu KPI ({createdEvaluations.length})</span>
             </button>
           </div>
+        )}
+      </div>
+
+      {/* 2. MAIN FUNCTIONAL TOOLBAR */}
+      <div className="bg-white rounded-2xl p-2.5 sm:p-3 border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-2.5">
+        {/* Left Function Buttons */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+          {/* [ ⚙ Cấu hình xếp loại ] */}
+          <button
+            type="button"
+            onClick={() => setIsRankingConfigModalOpen(true)}
+            className="h-10 px-3.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-800 font-bold text-xs border border-slate-300 shadow-2xs inline-flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
+            title="Cấu hình ngưỡng điểm danh mục xếp loại KPI"
+          >
+            <Settings className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>⚙ Cấu hình xếp loại</span>
+          </button>
+
+          {/* [ 📊 Xuất Excel ] */}
+          <button
+            type="button"
+            onClick={targetType === 'bgh' && bghSubTab === 'staff_list' ? handleExportCbqlExcel : handleExportExcel}
+            className="h-10 px-3.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-300 shadow-2xs inline-flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
+            title={targetType === 'bgh' && bghSubTab === 'staff_list' ? 'Xuất Excel danh sách CBQL' : 'Xuất file Excel danh sách phiếu KPI'}
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>📊 Xuất Excel</span>
+          </button>
+
+          {/* [ 🖨 In danh sách ] */}
+          <button
+            type="button"
+            onClick={targetType === 'bgh' && bghSubTab === 'staff_list' ? handlePrintCbqlList : handlePrintList}
+            className="h-10 px-3.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold text-xs border border-sky-300 shadow-2xs inline-flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
+            title={targetType === 'bgh' && bghSubTab === 'staff_list' ? 'In danh sách CBQL' : 'In danh sách phiếu KPI'}
+          >
+            <Printer className="w-4 h-4 text-sky-600 shrink-0" />
+            <span>🖨 In danh sách</span>
+          </button>
+
+          {/* [ 📝 Tiêu chí KPI ] */}
+          <button
+            type="button"
+            onClick={() => openCriteriaEditor(targetType)}
+            id={`btn-edit-criteria-${targetType}`}
+            className="h-10 px-3.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 font-bold text-xs border border-indigo-300 shadow-2xs inline-flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
+            title="Xem và chỉnh sửa tiêu chí cho bộ KPI này"
+          >
+            <Edit className="w-4 h-4 text-indigo-600 shrink-0" />
+            <span>📝 Tiêu chí KPI</span>
+          </button>
+
+          {/* [ 🗑 Xóa toàn bộ ] (Admin / BGH) */}
+          {isBgh && (
+            <button
+              type="button"
+              onClick={() => setIsClearAllModalOpen(true)}
+              id="btn-clear-all-evaluations"
+              className="h-10 px-3.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold text-xs border border-rose-300 shadow-2xs inline-flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
+              title="Xóa toàn bộ phiếu đánh giá KPI"
+            >
+              <Trash2 className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>🗑 Xóa toàn bộ</span>
+            </button>
+          )}
+        </div>
+
+        {/* Right Action Button: [ ＋ TẠO PHIẾU KPI ] */}
+        <div className="flex items-center gap-2 shrink-0 ml-auto sm:ml-0">
+          <button
+            type="button"
+            onClick={() => {
+              setPreselectedStaffId(undefined);
+              setIsCreateModalOpen(true);
+            }}
+            id={`btn-create-kpi-${targetType}`}
+            className="h-10 px-5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-slate-950 font-black text-xs sm:text-sm shadow-md shadow-amber-400/25 transition transform hover:scale-[1.02] active:scale-[0.98] inline-flex items-center justify-center gap-2 cursor-pointer border border-amber-300 whitespace-nowrap shrink-0"
+          >
+            <PlusCircle className="w-4 h-4 text-slate-950 shrink-0" />
+            <span>＋ TẠO PHIẾU KPI</span>
+          </button>
         </div>
       </div>
 

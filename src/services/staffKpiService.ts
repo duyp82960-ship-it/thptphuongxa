@@ -24,43 +24,43 @@ export interface StaffRankingTier {
 export const DEFAULT_STAFF_RANKING_TIERS: StaffRankingTier[] = [
   {
     id: 'tier-1',
-    name: 'Hoàn thành xuất sắc',
-    minScore: 95,
+    name: 'Hoàn thành xuất sắc nhiệm vụ',
+    minScore: 90,
     maxScore: 100,
     color: 'emerald',
     order: 1,
     isActive: true,
-    description: 'Từ 95 đến 100 điểm',
+    description: 'Từ 90 đến 100 điểm',
   },
   {
     id: 'tier-2',
-    name: 'Hoàn thành tốt',
-    minScore: 85,
-    maxScore: 95,
+    name: 'Hoàn thành tốt nhiệm vụ',
+    minScore: 80,
+    maxScore: 90,
     color: 'blue',
     order: 2,
     isActive: true,
-    description: 'Từ 85 đến dưới 95 điểm',
+    description: 'Từ 80 đến dưới 90 điểm',
   },
   {
     id: 'tier-3',
-    name: 'Hoàn thành',
-    minScore: 70,
-    maxScore: 85,
+    name: 'Hoàn thành nhiệm vụ',
+    minScore: 65,
+    maxScore: 80,
     color: 'amber',
     order: 3,
     isActive: true,
-    description: 'Từ 70 đến dưới 85 điểm',
+    description: 'Từ 65 đến dưới 80 điểm',
   },
   {
     id: 'tier-4',
-    name: 'Chưa hoàn thành',
+    name: 'Không hoàn thành nhiệm vụ',
     minScore: 0,
-    maxScore: 70,
+    maxScore: 65,
     color: 'rose',
     order: 4,
     isActive: true,
-    description: 'Dưới 70 điểm',
+    description: 'Dưới 65 điểm',
   },
 ];
 
@@ -123,29 +123,39 @@ export async function saveStaffRankingTiers(tiers: StaffRankingTier[]): Promise<
 /**
  * Calculate ranking for staff based on custom configured tiers
  */
-export function calculateStaffRank(score: number, tiers: StaffRankingTier[]): string {
-  const activeTiers = tiers
-    .filter((t) => t.isActive)
-    .sort((a, b) => b.minScore - a.minScore);
+export function calculateStaffRank(score: number, tiers?: StaffRankingTier[]): string {
+  if (tiers && tiers.length > 0) {
+    const activeTiers = tiers
+      .filter((t) => t.isActive)
+      .sort((a, b) => b.minScore - a.minScore);
 
-  if (activeTiers.length === 0) {
-    return 'Chưa xếp loại';
-  }
+    if (activeTiers.length > 0) {
+      for (const t of activeTiers) {
+        const isMaxLimit = t.maxScore >= 100;
+        if (score >= t.minScore && (isMaxLimit ? score <= 100 : score < t.maxScore)) {
+          return t.name;
+        }
+      }
 
-  for (const t of activeTiers) {
-    const isMaxLimit = t.maxScore >= 100;
-    if (score >= t.minScore && (isMaxLimit ? score <= 100 : score < t.maxScore)) {
-      return t.name;
+      // If score is higher than highest tier minScore
+      if (score >= activeTiers[0].minScore) {
+        return activeTiers[0].name;
+      }
+
+      // Return lowest active tier
+      return activeTiers[activeTiers.length - 1].name;
     }
   }
 
-  // If score is higher than highest tier minScore
-  if (score >= activeTiers[0].minScore) {
-    return activeTiers[0].name;
-  }
-
-  // Return lowest active tier
-  return activeTiers[activeTiers.length - 1].name;
+  // Statutory standard threshold (Requirement 6):
+  // 90–100 → Hoàn thành xuất sắc nhiệm vụ
+  // 80–<90 → Hoàn thành tốt nhiệm vụ
+  // 65–<80 → Hoàn thành nhiệm vụ
+  // <65 → Không hoàn thành nhiệm vụ
+  if (score >= 90) return 'Hoàn thành xuất sắc nhiệm vụ';
+  if (score >= 80) return 'Hoàn thành tốt nhiệm vụ';
+  if (score >= 65) return 'Hoàn thành nhiệm vụ';
+  return 'Không hoàn thành nhiệm vụ';
 }
 
 /**

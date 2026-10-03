@@ -31,6 +31,11 @@ import {
   RefreshCcw,
 } from 'lucide-react';
 
+import {
+  exportCriteriaSetToExcel,
+  exportCriteriaSetToWord,
+} from '../utils/exportUtils';
+
 interface StaffCriteriaManagementModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -98,6 +103,7 @@ export const StaffCriteriaManagementModal: React.FC<StaffCriteriaManagementModal
   const [isCriterionModalOpen, setIsCriterionModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingCriterionId, setEditingCriterionId] = useState<string | null>(null);
+  const [exportPosKey, setExportPosKey] = useState<string>('ketoan');
 
   // Form fields
   const [formId, setFormId] = useState('');
@@ -330,6 +336,53 @@ export const StaffCriteriaManagementModal: React.FC<StaffCriteriaManagementModal
     setFormIsActive(item.isActive);
     setErrorMsg(null);
     setIsCriterionModalOpen(true);
+  };
+
+  // Handle export staff position criteria
+  const handleExportStaffPosition = (format: 'excel' | 'word', posKey: string) => {
+    const posObj = OFFICIAL_STAFF_POSITIONS.find((p) => p.key === posKey) || OFFICIAL_STAFF_POSITIONS[0];
+    const genCriteria = draftConfig.generalCriteria || STAFF_GENERAL_KPI_CRITERIA;
+    const posCriteria = draftConfig.positionCriteriaMap?.[posKey] || posObj.criteria;
+    const criteriaList = [...genCriteria, ...posCriteria];
+
+    const targetTitle = `KPI Nhân viên (${posObj.name})`;
+    const schoolName = 'TRƯỜNG THPT PHƯƠNG XÁ';
+    const targetVersion = draftConfig.version || 1;
+
+    const formattedCriteria = criteriaList.map((c: any) => ({
+      id: c.id,
+      section: c.section || (c.id.startsWith('NV-A') ? 'A' : 'B'),
+      sectionTitle: c.sectionTitle || (c.id.startsWith('NV-A') ? 'KPI CHUNG – 30 ĐIỂM' : `KPI VỊ TRÍ: ${posObj.name}`),
+      groupTitle: c.groupTitle || posObj.name,
+      content: c.content,
+      maxPoints: c.maxPoints,
+      evidenceRequirement: c.evidenceRequirement || c.evidence || 'Theo phân công & hồ sơ minh chứng',
+      status: c.isActive === false ? ('inactive' as const) : ('active' as const),
+    }));
+
+    if (format === 'excel') {
+      exportCriteriaSetToExcel({
+        schoolName,
+        targetType: 'nhanvien',
+        targetTitle,
+        criteriaList: formattedCriteria,
+        scopeTitle: `Toàn bộ tiêu chí ${posObj.name}`,
+        version: targetVersion,
+        evalPeriod: 'Năm học 2026 - 2027',
+      });
+      showToast(`Đã xuất thành công bộ tiêu chí [${targetTitle}] ra file Excel (.xlsx)!`, 'success');
+    } else {
+      exportCriteriaSetToWord({
+        schoolName,
+        targetType: 'nhanvien',
+        targetTitle,
+        criteriaList: formattedCriteria,
+        scopeTitle: `Toàn bộ tiêu chí ${posObj.name}`,
+        version: targetVersion,
+        evalPeriod: 'Năm học 2026 - 2027',
+      });
+      showToast(`Đã xuất thành công bộ tiêu chí [${targetTitle}] ra file Word (.docx)!`, 'success');
+    }
   };
 
   // Toggle active status / Ngừng sử dụng (Requirement 16)
@@ -588,6 +641,41 @@ export const StaffCriteriaManagementModal: React.FC<StaffCriteriaManagementModal
             <span>{successMsg}</span>
           </div>
         )}
+
+        {/* Export Staff Position Toolbar */}
+        <div className="mx-6 mt-4 p-4 bg-purple-50/90 rounded-2xl border border-purple-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs shadow-xs">
+          <div className="flex items-center gap-2 font-black text-purple-950">
+            <Briefcase className="w-4 h-4 text-purple-700" />
+            <span>XUẤT BỘ TIÊU CHÍ VỊ TRÍ NHÂN VIÊN:</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <select
+              value={exportPosKey}
+              onChange={(e) => setExportPosKey(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-purple-300 font-bold bg-white text-slate-900 text-xs focus:ring-2 focus:ring-purple-600 focus:outline-none"
+            >
+              {OFFICIAL_STAFF_POSITIONS.map((pos) => (
+                <option key={pos.key} value={pos.key}>
+                  {pos.name} ({pos.points}đ vị trí + 30đ chung = 100đ)
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => handleExportStaffPosition('excel', exportPosKey)}
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+            >
+              <span>📊 Xuất Excel</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExportStaffPosition('word', exportPosKey)}
+              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+            >
+              <span>📄 Xuất Word</span>
+            </button>
+          </div>
+        </div>
 
         {/* Total Points Validation Banners (Requirement 9) */}
         <div className="mx-6 mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">

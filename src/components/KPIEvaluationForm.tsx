@@ -11,6 +11,7 @@ import {
   STAFF_KPI_CRITERIA,
   BGH_KPI_CRITERIA,
   computeTotalKpiScore,
+  getOfficialStaffCriteria,
 } from '../data/kpiEvaluationTemplates';
 import {
   X,
@@ -91,7 +92,7 @@ export const KPIEvaluationForm: React.FC<KPIEvaluationFormProps> = ({
     if (list && list.length > 0) return list;
 
     if (targetType === 'nhanvien' || (employee as StaffMember).department === 'Tổ Văn phòng') {
-      return STAFF_KPI_CRITERIA;
+      return getOfficialStaffCriteria((employee as StaffMember).position || '').allCriteria;
     }
     if (targetType === 'bgh') {
       return BGH_KPI_CRITERIA;
